@@ -369,7 +369,7 @@ void ChassisTask()
         chassis_cmd_recv.wz = PIDCalculate(&Chassis_Follow_PID, chassis_cmd_recv.offset_angle, 0);
         break;
     case CHASSIS_ROTATE: // 自旋,同时保持全向机动;当前wz维持定值,后续增加不规则的变速策略
-        chassis_cmd_recv.wz = 100;
+        chassis_cmd_recv.wz = 3000;
         break;
     default:
         break;

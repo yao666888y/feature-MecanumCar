@@ -212,6 +212,18 @@ static void RemoteControlSet()
         gimbal_cmd_send.yaw -= 0.002f * (float)rc_data[TEMP].rc.rocker_l_;
         gimbal_cmd_send.pitch += 0.001f * (float)rc_data[TEMP].rc.rocker_l1;
     }
+    else if (switch_is_up(rc_data[TEMP].rc.switch_right)) // 右侧开关状态[上],小陀螺模式
+    {
+        chassis_cmd_send.chassis_mode = CHASSIS_ROTATE;
+        gimbal_cmd_send.gimbal_mode = GIMBAL_GYRO_MODE;
+        // 底盘参数,目前没有加入小陀螺(调试似乎暂时没有必要),系数需要调整
+        chassis_cmd_send.vx = 8 * rc_data[TEMP].rc.rocker_r1; // 1竖直方向
+        chassis_cmd_send.vy = 8 * rc_data[TEMP].rc.rocker_r_; // _水平方向
+        // chassis_cmd_send.wz = rc_data[TEMP].rc.rocker_l_;
+        gimbal_cmd_send.yaw -= 0.002f * (float)rc_data[TEMP].rc.rocker_l_;
+        gimbal_cmd_send.pitch += 0.001f * (float)rc_data[TEMP].rc.rocker_l1;
+    }
+
     // 云台参数,确定云台控制数据
     // if (switch_is_mid(rc_data[TEMP].rc.switch_left)) // 左侧开关状态为[中],视觉模式
     // {
