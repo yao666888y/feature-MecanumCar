@@ -166,6 +166,12 @@ static void CalcOffsetAngle()
     else
         chassis_cmd_send.offset_angle = angle - YAW_ALIGN_ANGLE + 360.0f;
 #endif
+
+#if YAW_INSTALLATION_REVERSE
+    chassis_cmd_send.offset_angle = -chassis_cmd_send.offset_angle; // 如果云台安装方向和文档中不一致,需要反向
+#endif
+
+
 }
 
 /**
@@ -196,10 +202,13 @@ static void RemoteControlSet()
     else if (switch_is_down(rc_data[TEMP].rc.switch_right)) // 右侧开关状态[下],底盘和云台分离,底盘保持不转动
     {
         chassis_cmd_send.chassis_mode = CHASSIS_NO_FOLLOW;
-        gimbal_cmd_send.gimbal_mode = GIMBAL_GYRO_MODE;
+        gimbal_cmd_send.gimbal_mode = GIMBAL_FREE_MODE;
         // 底盘参数,目前没有加入小陀螺(调试似乎暂时没有必要),系数需要调整
-        chassis_cmd_send.vx = ((float)rc_data[TEMP].rc.rocker_r_ > CHASSIS_DEAD_BAND || (float)rc_data[TEMP].rc.rocker_r_ < -CHASSIS_DEAD_BAND) ? (float)rc_data[TEMP].rc.rocker_r_ * 5.0f : 0.0f; // _水平方向
-        chassis_cmd_send.vy = ((float)rc_data[TEMP].rc.rocker_r1 > CHASSIS_DEAD_BAND || (float)rc_data[TEMP].rc.rocker_r1 < -CHASSIS_DEAD_BAND) ? (float)rc_data[TEMP].rc.rocker_r1 * 5.0f : 0.0f; // 1竖直方向
+        chassis_cmd_send.vx = 4 * rc_data[TEMP].rc.rocker_r1; // 1竖直方向
+        chassis_cmd_send.vy = 4 * rc_data[TEMP].rc.rocker_r_; // _水平方向
+        // chassis_cmd_send.wz = rc_data[TEMP].rc.rocker_l_;
+        gimbal_cmd_send.yaw -= 0.005f * (float)rc_data[TEMP].rc.rocker_l_;
+        gimbal_cmd_send.pitch += 0.001f * (float)rc_data[TEMP].rc.rocker_l1;
     }
     // 云台参数,确定云台控制数据
     // if (switch_is_mid(rc_data[TEMP].rc.switch_left)) // 左侧开关状态为[中],视觉模式
@@ -338,7 +347,7 @@ static void MouseKeySet()
 static void EmergencyHandler()
 {
     // 拨轮向下打进入急停模式.注意向打时下拨轮是正
-    if (rc_data[TEMP].rc.dial > 300 || robot_state == ROBOT_STOP) // 还需添加重要应用和模块离线的判断
+    if (rc_data[TEMP].rc.dial > 300 || switch_is_up(rc_data[TEMP].rc.switch_left) || robot_state == ROBOT_STOP) // 还需添加重要应用和模块离线的判断
     {
         robot_state = ROBOT_STOP;
         gimbal_cmd_send.gimbal_mode = GIMBAL_ZERO_FORCE;

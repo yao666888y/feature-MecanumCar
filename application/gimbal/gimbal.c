@@ -22,22 +22,22 @@ void GimbalInit()
     Motor_Init_Config_s yaw_config = {
         .can_init_config = {
             .can_handle = &hcan1,
-            .tx_id = 1,
+            .tx_id = 5,
         },
         .controller_param_init_config = {
             .angle_PID = {
-                .Kp = 8, // 8
+                .Kp = 5, // 8
                 .Ki = 0,
                 .Kd = 0,
                 .DeadBand = 0.1,
                 .Improve = PID_Trapezoid_Intergral | PID_Integral_Limit | PID_Derivative_On_Measurement,
                 .IntegralLimit = 100,
 
-                .MaxOut = 500,
+                .MaxOut = 2000,
             },
             .speed_PID = {
-                .Kp = 50,  // 50
-                .Ki = 200, // 200
+                .Kp = 20,  // 50
+                .Ki = 100, // 200
                 .Kd = 0,
                 .Improve = PID_Trapezoid_Intergral | PID_Integral_Limit | PID_Derivative_On_Measurement,
                 .IntegralLimit = 3000,
@@ -53,6 +53,7 @@ void GimbalInit()
             .outer_loop_type = ANGLE_LOOP,
             .close_loop_type = ANGLE_LOOP | SPEED_LOOP,
             .motor_reverse_flag = MOTOR_DIRECTION_NORMAL,
+            .feedback_reverse_flag = FEEDBACK_DIRECTION_NORMAL,
         },
         .motor_type = GM6020};
     // PITCH
@@ -88,6 +89,7 @@ void GimbalInit()
             .outer_loop_type = ANGLE_LOOP,
             .close_loop_type = SPEED_LOOP | ANGLE_LOOP,
             .motor_reverse_flag = MOTOR_DIRECTION_NORMAL,
+            .feedback_reverse_flag = FEEDBACK_DIRECTION_NORMAL,
         },
         .motor_type = GM6020,
     };
@@ -130,10 +132,10 @@ void GimbalTask()
     case GIMBAL_FREE_MODE: // 后续删除,或加入云台追地盘的跟随模式(响应速度更快)
         DJIMotorEnable(yaw_motor);
         DJIMotorEnable(pitch_motor);
-        DJIMotorChangeFeed(yaw_motor, ANGLE_LOOP, OTHER_FEED);
-        DJIMotorChangeFeed(yaw_motor, SPEED_LOOP, OTHER_FEED);
-        DJIMotorChangeFeed(pitch_motor, ANGLE_LOOP, OTHER_FEED);
-        DJIMotorChangeFeed(pitch_motor, SPEED_LOOP, OTHER_FEED);
+        DJIMotorChangeFeed(yaw_motor, ANGLE_LOOP, MOTOR_FEED);
+        DJIMotorChangeFeed(yaw_motor, SPEED_LOOP, MOTOR_FEED);
+        DJIMotorChangeFeed(pitch_motor, ANGLE_LOOP, MOTOR_FEED);
+        DJIMotorChangeFeed(pitch_motor, SPEED_LOOP, MOTOR_FEED);
         DJIMotorSetRef(yaw_motor, gimbal_cmd_recv.yaw); // yaw和pitch会在robot_cmd中处理好多圈和单圈
         DJIMotorSetRef(pitch_motor, gimbal_cmd_recv.pitch);
         break;

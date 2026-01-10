@@ -264,10 +264,10 @@ void chassis_vector_to_GM6020_wheel_angle_ecd(float vx_set, float vy_set, float 
 static void MecanumCalculate()
 {
     // 麦克纳姆轮底盘运动学正解算
-    vt_lf = chassis_vx + chassis_vy + chassis_cmd_recv.wz * LF_CENTER;
-    vt_rf = chassis_vx - chassis_vy + chassis_cmd_recv.wz * RF_CENTER;
-    vt_lb = -chassis_vx + chassis_vy + chassis_cmd_recv.wz * LB_CENTER;
-    vt_rb = -chassis_vx - chassis_vy + chassis_cmd_recv.wz * RB_CENTER;
+    vt_lf = chassis_vy + chassis_vx + chassis_cmd_recv.wz * LF_CENTER;
+    vt_rf = chassis_vy - chassis_vx + chassis_cmd_recv.wz * RF_CENTER;
+    vt_lb = -chassis_vy + chassis_vx + chassis_cmd_recv.wz * LB_CENTER;
+    vt_rb = -chassis_vy - chassis_vx + chassis_cmd_recv.wz * RB_CENTER;
 
     // 舵轮底盘运动学正解算->后续新添舵轮计算函数
     // chassis_vector_to_M3508_wheel_speed(chassis_vx, chassis_vy, chassis_cmd_recv.wz, &vt_lf, &vt_rf, &vt_rb, &vt_lb);
