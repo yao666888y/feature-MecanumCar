@@ -190,16 +190,8 @@ static void RemoteControlSet()
         chassis_cmd_send.vy = 8 * rc_data[TEMP].rc.rocker_r_; // _水平方向
         gimbal_cmd_send.yaw -= 0.002f * (float)rc_data[TEMP].rc.rocker_l_;
         gimbal_cmd_send.pitch += 0.001f * (float)rc_data[TEMP].rc.rocker_l1;
-        // if((float)rc_data[TEMP].rc.rocker_r_ > 500)
-        // {
-        //     chassis_cmd_send.wz = 100;
-        // }
-        // else if ((float)rc_data[TEMP].rc.rocker_r_ < -500)
-        // {
-        //     chassis_cmd_send.wz = -100;
-        // }
-        // else
-        //     chassis_cmd_send.wz = 0;
+        
+        shoot_cmd_send.load_mode = LOAD_1_BULLET;
     }
     else if (switch_is_down(rc_data[TEMP].rc.switch_right)) // 右侧开关状态[下],底盘和云台分离,底盘保持不转动
     {
@@ -210,7 +202,10 @@ static void RemoteControlSet()
         chassis_cmd_send.vy = 8 * rc_data[TEMP].rc.rocker_r_; // _水平方向
         // chassis_cmd_send.wz = rc_data[TEMP].rc.rocker_l_;
         gimbal_cmd_send.yaw -= 0.002f * (float)rc_data[TEMP].rc.rocker_l_;
-        gimbal_cmd_send.pitch += 0.001f * (float)rc_data[TEMP].rc.rocker_l1;
+        gimbal_cmd_send.pitch += 0.0005f * (float)rc_data[TEMP].rc.rocker_l1;
+
+        shoot_cmd_send.load_mode = LOAD_BURSTFIRE;
+        shoot_cmd_send.shoot_rate = 8.0f; // 8发/秒
     }
     else if (switch_is_up(rc_data[TEMP].rc.switch_right)) // 右侧开关状态[上],小陀螺模式
     {
@@ -223,6 +218,17 @@ static void RemoteControlSet()
         gimbal_cmd_send.yaw -= 0.002f * (float)rc_data[TEMP].rc.rocker_l_;
         gimbal_cmd_send.pitch += 0.001f * (float)rc_data[TEMP].rc.rocker_l1;
     }
+
+    if (rc_data->rc.dial > 300)
+    {
+        shoot_cmd_send.shoot_mode = SHOOT_ON;
+    }
+    else
+    {
+        shoot_cmd_send.shoot_mode = SHOOT_OFF;
+    }
+
+
 
     // 云台参数,确定云台控制数据
     // if (switch_is_mid(rc_data[TEMP].rc.switch_left)) // 左侧开关状态为[中],视觉模式
@@ -360,8 +366,8 @@ static void MouseKeySet()
  */
 static void EmergencyHandler()
 {
-    // 拨轮向下打进入急停模式.注意向打时下拨轮是正
-    if (rc_data[TEMP].rc.dial > 300 || switch_is_up(rc_data[TEMP].rc.switch_left) || robot_state == ROBOT_STOP) // 还需添加重要应用和模块离线的判断
+    // 遥控器左侧开关为[上]，进入急停模式
+    if (switch_is_up(rc_data[TEMP].rc.switch_left) || robot_state == ROBOT_STOP) // 还需添加重要应用和模块离线的判断
     {
         robot_state = ROBOT_STOP;
         gimbal_cmd_send.gimbal_mode = GIMBAL_ZERO_FORCE;
@@ -372,7 +378,7 @@ static void EmergencyHandler()
         LOGERROR("[CMD] emergency stop!");
         AlarmSetStatus(robocmd_alarm, ALARM_ON);
     }
-    // 遥控器右侧开关为[中],恢复正常运行
+    // 遥控器左侧开关为[中],恢复正常运行
     if (switch_is_mid(rc_data[TEMP].rc.switch_left))
     {
         robot_state = ROBOT_READY;
