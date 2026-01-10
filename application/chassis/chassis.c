@@ -67,7 +67,7 @@ void ChassisInit()
         .can_init_config.can_handle = &hcan1,
         .controller_param_init_config = {
             .speed_PID = {
-                .Kp = 3, // 4.5
+                .Kp = 4.5, // 4.5
                 .Ki = 0,   // 0
                 .Kd = 0,   // 0
                 .IntegralLimit = 3000,
@@ -86,63 +86,21 @@ void ChassisInit()
     };
     //  @todo: 当前还没有设置电机的正反转,仍然需要手动添加reference的正负号,需要电机module的支持,待修改.
     // 使用功率控制的电机需要使用PowerControlInit()函数初始化,因为电机的控制方式不同
-    chassis_M3508_motor_config.can_init_config.tx_id = 1;
+    chassis_M3508_motor_config.can_init_config.tx_id = 2;
     chassis_M3508_motor_config.controller_setting_init_config.motor_reverse_flag = MOTOR_DIRECTION_NORMAL;
     motor_lf = DJIMotorInit(&chassis_M3508_motor_config);
 
-    chassis_M3508_motor_config.can_init_config.tx_id = 2;
+    chassis_M3508_motor_config.can_init_config.tx_id = 1;
     chassis_M3508_motor_config.controller_setting_init_config.motor_reverse_flag = MOTOR_DIRECTION_NORMAL;
     motor_rf = DJIMotorInit(&chassis_M3508_motor_config);
 
-    chassis_M3508_motor_config.can_init_config.tx_id = 4;
+    chassis_M3508_motor_config.can_init_config.tx_id = 3;
     chassis_M3508_motor_config.controller_setting_init_config.motor_reverse_flag = MOTOR_DIRECTION_NORMAL;
     motor_lb = DJIMotorInit(&chassis_M3508_motor_config);
 
-    chassis_M3508_motor_config.can_init_config.tx_id = 3;
+    chassis_M3508_motor_config.can_init_config.tx_id = 4;
     chassis_M3508_motor_config.controller_setting_init_config.motor_reverse_flag = MOTOR_DIRECTION_NORMAL;
     motor_rb = DJIMotorInit(&chassis_M3508_motor_config);
-
-
-    // GM6020电机的初始化(舵机电机)
-     Motor_Init_Config_s chassis_GM6020_motor_config = {
-        .can_init_config.can_handle = &hcan1,
-        .controller_param_init_config = {
-            .angle_PID = {
-                .Kp = 10,
-                .Ki = 0,
-                .Kd = 0,
-                .MaxOut = 20000,
-                .Improve = PID_Trapezoid_Intergral | PID_Integral_Limit | PID_Derivative_On_Measurement,
-            },
-            .speed_PID = {
-                .Kp = 10,
-                .Ki = 0.1,
-                .Kd = 0,
-                .MaxOut = 20000,
-                .Improve = PID_Trapezoid_Intergral | PID_Integral_Limit | PID_Derivative_On_Measurement,
-            },
-            // .other_angle_feedback_ptr = &gimba_IMU_data->YawTotalAngle,
-            // 还需要增加角速度额外反馈指针,注意方向,ins_task.md中有c板的bodyframe坐标系说明
-            // .other_speed_feedback_ptr = &gimba_IMU_data->Gyro[2],
-        },
-        .controller_setting_init_config = {
-            .angle_feedback_source = MOTOR_FEED,
-            .speed_feedback_source = MOTOR_FEED,
-            .outer_loop_type = ANGLE_LOOP,
-            .close_loop_type = ANGLE_LOOP | SPEED_LOOP,
-            .motor_reverse_flag = MOTOR_DIRECTION_NORMAL, 
-        },
-        .motor_type = GM6020};
-
-    chassis_GM6020_motor_config.can_init_config.tx_id = 5;
-    servo_lf = DJIMotorInit(&chassis_GM6020_motor_config);
-    chassis_GM6020_motor_config.can_init_config.tx_id = 6;
-    servo_rf = DJIMotorInit(&chassis_GM6020_motor_config);
-    chassis_GM6020_motor_config.can_init_config.tx_id = 7;
-    servo_rb = DJIMotorInit(&chassis_GM6020_motor_config);
-    chassis_GM6020_motor_config.can_init_config.can_handle = &hcan2;
-    chassis_GM6020_motor_config.can_init_config.tx_id = 1;
-    servo_lb = DJIMotorInit(&chassis_GM6020_motor_config);
 
 //     referee_data = UITaskInit(&huart6, &ui_data); // 裁判系统初始化,会同时初始化UI
 
@@ -306,14 +264,14 @@ void chassis_vector_to_GM6020_wheel_angle_ecd(float vx_set, float vy_set, float 
 static void MecanumCalculate()
 {
     // 麦克纳姆轮底盘运动学正解算
-    // vt_lf = -chassis_vx - chassis_vy - chassis_cmd_recv.wz * LF_CENTER;
-    // vt_rf = -chassis_vx + chassis_vy - chassis_cmd_recv.wz * RF_CENTER;
-    // vt_lb = chassis_vx - chassis_vy - chassis_cmd_recv.wz * LB_CENTER;
-    // vt_rb = chassis_vx + chassis_vy - chassis_cmd_recv.wz * RB_CENTER;
+    vt_lf = chassis_vx + chassis_vy + chassis_cmd_recv.wz * LF_CENTER;
+    vt_rf = chassis_vx - chassis_vy + chassis_cmd_recv.wz * RF_CENTER;
+    vt_lb = -chassis_vx + chassis_vy + chassis_cmd_recv.wz * LB_CENTER;
+    vt_rb = -chassis_vx - chassis_vy + chassis_cmd_recv.wz * RB_CENTER;
 
-    // 舵轮底盘运动学正解算
-    chassis_vector_to_M3508_wheel_speed(chassis_vx, chassis_vy, chassis_cmd_recv.wz, &vt_lf, &vt_rf, &vt_rb, &vt_lb);
-    chassis_vector_to_GM6020_wheel_angle_ecd(chassis_vx, chassis_vy, chassis_cmd_recv.wz, &angle_lf, &angle_rf, &angle_lb, &angle_rb);
+    // 舵轮底盘运动学正解算->后续新添舵轮计算函数
+    // chassis_vector_to_M3508_wheel_speed(chassis_vx, chassis_vy, chassis_cmd_recv.wz, &vt_lf, &vt_rf, &vt_rb, &vt_lb);
+    // chassis_vector_to_GM6020_wheel_angle_ecd(chassis_vx, chassis_vy, chassis_cmd_recv.wz, &angle_lf, &angle_rf, &angle_lb, &angle_rb);
 }
 
 /**
