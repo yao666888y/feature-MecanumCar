@@ -33,7 +33,7 @@ void GimbalInit()
                 .Improve = PID_Trapezoid_Intergral | PID_Integral_Limit | PID_Derivative_On_Measurement,
                 .IntegralLimit = 100,
 
-                .MaxOut = 2000,
+                .MaxOut = 5000,
             },
             .speed_PID = {
                 .Kp = 50,  // 50
@@ -60,7 +60,7 @@ void GimbalInit()
     Motor_Init_Config_s pitch_config = {
         .can_init_config = {
             .can_handle = &hcan2,
-            .tx_id = 2,
+            .tx_id = 6,
         },
         .controller_param_init_config = {
             .angle_PID = {
@@ -69,7 +69,7 @@ void GimbalInit()
                 .Kd = 0,
                 .Improve = PID_Trapezoid_Intergral | PID_Integral_Limit | PID_Derivative_On_Measurement,
                 .IntegralLimit = 100,
-                .MaxOut = 500,
+                .MaxOut = 2000,
             },
             .speed_PID = {
                 .Kp = 50,  // 50
@@ -79,9 +79,10 @@ void GimbalInit()
                 .IntegralLimit = 2500,
                 .MaxOut = 20000,
             },
-            .other_angle_feedback_ptr = &gimba_IMU_data->Pitch,
+            // 安装云台时pitch轴是绕横轴转动,对应ins_task中的roll角
+            .other_angle_feedback_ptr = &gimba_IMU_data->Roll,
             // 还需要增加角速度额外反馈指针,注意方向,ins_task.md中有c板的bodyframe坐标系说明
-            .other_speed_feedback_ptr = (&gimba_IMU_data->Gyro[0]),
+            .other_speed_feedback_ptr = (&gimba_IMU_data->Gyro[1]),
         },
         .controller_setting_init_config = {
             .angle_feedback_source = OTHER_FEED,

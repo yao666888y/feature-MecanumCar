@@ -240,14 +240,14 @@ static void RemoteControlSet()
     // }
 
     // 云台软件限位
-    // if(gimbal_cmd_send.pitch > PITCH_MAX)
-    // {
-    //     gimbal_cmd_send.pitch = PITCH_MAX;
-    // }
-    // else if (gimbal_cmd_send.pitch < PITCH_MIN)
-    // {
-    //     gimbal_cmd_send.pitch = PITCH_MIN;
-    // }
+    if(gimbal_cmd_send.pitch > PITCH_MAX_ANGLE)
+    {
+        gimbal_cmd_send.pitch = PITCH_MAX_ANGLE;
+    }
+    else if (gimbal_cmd_send.pitch < PITCH_MIN_ANGLE)
+    {
+        gimbal_cmd_send.pitch = PITCH_MIN_ANGLE;
+    }
 
     // 底盘参数,目前没有加入小陀螺(调试似乎暂时没有必要),系数需要调整
     // chassis_cmd_send.vx = 50.0f * (float)rc_data[TEMP].rc.rocker_r_; // _水平方向
