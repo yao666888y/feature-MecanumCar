@@ -170,8 +170,9 @@ static void CalcOffsetAngle()
 #if YAW_INSTALLATION_REVERSE
     chassis_cmd_send.offset_angle = -chassis_cmd_send.offset_angle; // 如果云台安装方向和文档中不一致,需要反向
 #endif
-
-
+    // 将offset_angle归一化到-180~180
+    while (chassis_cmd_send.offset_angle > 180.0f) chassis_cmd_send.offset_angle -= 360.0f;
+    while (chassis_cmd_send.offset_angle <= -180.0f) chassis_cmd_send.offset_angle += 360.0f;
 }
 
 /**
@@ -181,13 +182,14 @@ static void CalcOffsetAngle()
 static void RemoteControlSet()
 {
     // 控制底盘和云台运行模式,云台待添加,云台是否始终使用IMU数据?
-    if (switch_is_up(rc_data[TEMP].rc.switch_right)) // 右侧开关状态[上],小陀螺模式
+    if (switch_is_mid(rc_data[TEMP].rc.switch_right)) // 右侧开关状态[中],底盘跟随云台,云台陀螺仪模式
     {
-        // chassis_cmd_send.chassis_mode = CHASSIS_ROTATE;
-        // gimbal_cmd_send.gimbal_mode = GIMBAL_GYRO_MODE;
-        // chassis_cmd_send.vx = ((float)rc_data[TEMP].rc.rocker_r_ > CHASSIS_DEAD_BAND || (float)rc_data[TEMP].rc.rocker_r_ < -CHASSIS_DEAD_BAND) ? (float)rc_data[TEMP].rc.rocker_r_ * 5.0f : 0.0f; // _水平方向
-        // chassis_cmd_send.vy = ((float)rc_data[TEMP].rc.rocker_r1 > CHASSIS_DEAD_BAND || (float)rc_data[TEMP].rc.rocker_r1 < -CHASSIS_DEAD_BAND) ? (float)rc_data[TEMP].rc.rocker_r1 * 5.0f : 0.0f; // 1竖直方向
-
+        chassis_cmd_send.chassis_mode = CHASSIS_FOLLOW_GIMBAL_YAW;
+        gimbal_cmd_send.gimbal_mode = GIMBAL_GYRO_MODE;
+        chassis_cmd_send.vx = 8 * rc_data[TEMP].rc.rocker_r1; // 1竖直方向
+        chassis_cmd_send.vy = 8 * rc_data[TEMP].rc.rocker_r_; // _水平方向
+        gimbal_cmd_send.yaw -= 0.002f * (float)rc_data[TEMP].rc.rocker_l_;
+        gimbal_cmd_send.pitch += 0.001f * (float)rc_data[TEMP].rc.rocker_l1;
         // if((float)rc_data[TEMP].rc.rocker_r_ > 500)
         // {
         //     chassis_cmd_send.wz = 100;
@@ -202,12 +204,12 @@ static void RemoteControlSet()
     else if (switch_is_down(rc_data[TEMP].rc.switch_right)) // 右侧开关状态[下],底盘和云台分离,底盘保持不转动
     {
         chassis_cmd_send.chassis_mode = CHASSIS_NO_FOLLOW;
-        gimbal_cmd_send.gimbal_mode = GIMBAL_FREE_MODE;
+        gimbal_cmd_send.gimbal_mode = GIMBAL_GYRO_MODE;
         // 底盘参数,目前没有加入小陀螺(调试似乎暂时没有必要),系数需要调整
-        chassis_cmd_send.vx = 4 * rc_data[TEMP].rc.rocker_r1; // 1竖直方向
-        chassis_cmd_send.vy = 4 * rc_data[TEMP].rc.rocker_r_; // _水平方向
+        chassis_cmd_send.vx = 8 * rc_data[TEMP].rc.rocker_r1; // 1竖直方向
+        chassis_cmd_send.vy = 8 * rc_data[TEMP].rc.rocker_r_; // _水平方向
         // chassis_cmd_send.wz = rc_data[TEMP].rc.rocker_l_;
-        gimbal_cmd_send.yaw -= 0.005f * (float)rc_data[TEMP].rc.rocker_l_;
+        gimbal_cmd_send.yaw -= 0.002f * (float)rc_data[TEMP].rc.rocker_l_;
         gimbal_cmd_send.pitch += 0.001f * (float)rc_data[TEMP].rc.rocker_l1;
     }
     // 云台参数,确定云台控制数据

@@ -60,6 +60,9 @@ static float chassis_vx, chassis_vy;                      // 将云台系的速�
 static float vt_lf, vt_rf, vt_lb, vt_rb;                  // 底盘电机速度解算后的临时输出,待进行限幅
 static float angle_lf, angle_rf, angle_lb, angle_rb;      // 底盘舵机角度解算后的临时输出,待进行限幅
 
+//底盘跟随PID
+static PIDInstance Chassis_Follow_PID;
+
 void ChassisInit()
 {
     // 四个轮子的参数一样,改tx_id和反转标志位即可
@@ -101,6 +104,19 @@ void ChassisInit()
     chassis_M3508_motor_config.can_init_config.tx_id = 4;
     chassis_M3508_motor_config.controller_setting_init_config.motor_reverse_flag = MOTOR_DIRECTION_NORMAL;
     motor_rb = DJIMotorInit(&chassis_M3508_motor_config);
+
+    //底盘跟随PID初始化
+    PID_Init_Config_s Chassis_Follow_PID_config = {
+        .Kp = -40.0f,
+        .Ki = -0.0f,
+        .Kd = 0.0f,
+        .MaxOut = 5000.0f,
+        .DeadBand = 0.0f,
+        .CoefA = 0.0f,
+        .CoefB = 0.0f,
+        .Improve = PID_Trapezoid_Intergral | PID_ChangingIntegrationRate,
+    };
+    PIDInit(&Chassis_Follow_PID, &Chassis_Follow_PID_config);
 
 //     referee_data = UITaskInit(&huart6, &ui_data); // 裁判系统初始化,会同时初始化UI
 
@@ -350,7 +366,7 @@ void ChassisTask()
         chassis_cmd_recv.wz = 0;
         break;
     case CHASSIS_FOLLOW_GIMBAL_YAW: // 跟随云台,不单独设置pid,以误差角度平方为速度输出
-        chassis_cmd_recv.wz = -1.5f * chassis_cmd_recv.offset_angle * abs(chassis_cmd_recv.offset_angle);
+        chassis_cmd_recv.wz = PIDCalculate(&Chassis_Follow_PID, chassis_cmd_recv.offset_angle, 0);
         break;
     case CHASSIS_ROTATE: // 自旋,同时保持全向机动;当前wz维持定值,后续增加不规则的变速策略
         chassis_cmd_recv.wz = 100;
