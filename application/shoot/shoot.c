@@ -1,13 +1,14 @@
 #include "shoot.h"
 #include "robot_def.h"
-
 #include "dji_motor.h"
 #include "message_center.h"
 #include "bsp_dwt.h"
 #include "general_def.h"
+#include "servo_motor.h"
 
 /* 对于双发射机构的机器人,将下面的数据封装成结构体即可,生成两份shoot应用实例 */
-static DJIMotorInstance *friction_l, *friction_r, *loader; // 拨盘电机
+static DJIMotorInstance  *loader; // 拨盘电机
+static ServoInstance *friction_l, *friction_r; // 左右摩擦轮
 // static servo_instance *lid; 需要增加弹舱盖
 
 static Publisher_t *shoot_pub;
@@ -21,43 +22,19 @@ static float hibernate_time = 0, dead_time = 0;
 void ShootInit()
 {
     // 左摩擦轮
-    // Motor_Init_Config_s friction_config = {
-    //     .can_init_config = {
-    //         .can_handle = &hcan2,
-    //     },
-    //     .controller_param_init_config = {
-    //         .speed_PID = {
-    //             .Kp = 0, // 20
-    //             .Ki = 0, // 1
-    //             .Kd = 0,
-    //             .Improve = PID_Integral_Limit,
-    //             .IntegralLimit = 10000,
-    //             .MaxOut = 15000,
-    //         },
-    //         .current_PID = {
-    //             .Kp = 0, // 0.7
-    //             .Ki = 0, // 0.1
-    //             .Kd = 0,
-    //             .Improve = PID_Integral_Limit,
-    //             .IntegralLimit = 10000,
-    //             .MaxOut = 15000,
-    //         },
-    //     },
-    //     .controller_setting_init_config = {
-    //         .angle_feedback_source = MOTOR_FEED,
-    //         .speed_feedback_source = MOTOR_FEED,
-
-    //         .outer_loop_type = SPEED_LOOP,
-    //         .close_loop_type = SPEED_LOOP | CURRENT_LOOP,
-    //         .motor_reverse_flag = MOTOR_DIRECTION_NORMAL,
-    //     },
-    //     .motor_type = M3508};
-    // friction_config.can_init_config.tx_id = 1,
-    // friction_l = DJIMotorInit(&friction_config);
-
-    // friction_config.can_init_config.tx_id = 2; // 右摩擦轮,改txid和方向就行
-    // friction_config.controller_setting_init_config.motor_reverse_flag = MOTOR_DIRECTION_REVERSE;
-    // friction_r = DJIMotorInit(&friction_config);
+    Servo_Init_Config_s friction_config = {
+        .pwm_init_config = {
+            .htim = &htim1,
+            .channel = TIM_CHANNEL_1,
+            .period = 0.020f,    // 20ms
+            .dutyratio = 0.0f,     // 初始占空比0
+            .callback = NULL,
+            .id = 0,
+        },
+        .servo_type = PWM_Servo,
+    };
+    friction_l = ServoInit(&friction_config);
+    ServoSetAngle(friction_l, 1.0f); // 设置初始角度,实测调整
 
     // 拨盘电机
     Motor_Init_Config_s loader_config = {
@@ -100,7 +77,6 @@ void ShootInit()
         .motor_type = M2006 // 英雄使用m3508
     };
     loader = DJIMotorInit(&loader_config);
-
     
     shoot_pub = PubRegister("shoot_feed", sizeof(Shoot_Upload_Data_s));
     shoot_sub = SubRegister("shoot_cmd", sizeof(Shoot_Ctrl_Cmd_s));
@@ -115,14 +91,14 @@ void ShootTask()
     // 对shoot mode等于SHOOT_STOP的情况特殊处理,直接停止所有电机(紧急停止)
     if (shoot_cmd_recv.shoot_mode == SHOOT_OFF)
     {
-        DJIMotorStop(friction_l);
-        DJIMotorStop(friction_r);
+        // DJIMotorStop(friction_l);
+        // DJIMotorStop(friction_r);
         DJIMotorStop(loader);
     }
     else // 恢复运行
     {
-        DJIMotorEnable(friction_l);
-        DJIMotorEnable(friction_r);
+        // DJIMotorEnable(friction_l);
+        // DJIMotorEnable(friction_r);
         DJIMotorEnable(loader);
     }
 
@@ -180,27 +156,32 @@ void ShootTask()
         switch (shoot_cmd_recv.bullet_speed)
         {
         case SMALL_AMU_15:
-            DJIMotorSetRef(friction_l, 0);
-            DJIMotorSetRef(friction_r, 0);
+            for(float i=0.0f;i<0.075f;i+=0.001f)
+            {
+                ServoSetAngle(friction_l, i); 
+            }
+            // DJIMotorSetRef(friction_l, 0);
+            // DJIMotorSetRef(friction_r, 0);
             break;
         case SMALL_AMU_18:
-            DJIMotorSetRef(friction_l, 0);
-            DJIMotorSetRef(friction_r, 0);
+            // DJIMotorSetRef(friction_l, 0);
+            // DJIMotorSetRef(friction_r, 0);
             break;
         case SMALL_AMU_30:
-            DJIMotorSetRef(friction_l, 0);
-            DJIMotorSetRef(friction_r, 0);
+            // DJIMotorSetRef(friction_l, 0);
+            // DJIMotorSetRef(friction_r, 0);
             break;
         default: // 当前为了调试设定的默认值4000,因为还没有加入裁判系统无法读取弹速.
-            DJIMotorSetRef(friction_l, 30000);
-            DJIMotorSetRef(friction_r, 30000);
+            // DJIMotorSetRef(friction_l, 30000);
+            // DJIMotorSetRef(friction_r, 30000);
             break;
         }
     }
     else // 关闭摩擦轮
     {
-        DJIMotorSetRef(friction_l, 0);
-        DJIMotorSetRef(friction_r, 0);
+        ServoSetAngle(friction_l, 1.0f); 
+        // DJIMotorSetRef(friction_l, 0);
+        // DJIMotorSetRef(friction_r, 0);
     }
 
     // 开关弹舱盖

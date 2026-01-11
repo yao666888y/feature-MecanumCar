@@ -70,12 +70,12 @@ void ChassisInit()
         .can_init_config.can_handle = &hcan1,
         .controller_param_init_config = {
             .speed_PID = {
-                .Kp = 4.5, // 4.5
+                .Kp = 4, // 4.5
                 .Ki = 0,   // 0
-                .Kd = 0,   // 0
+                .Kd = 0.01f,   // 0
                 .IntegralLimit = 3000,
                 .Improve = PID_Trapezoid_Intergral | PID_Integral_Limit | PID_Derivative_On_Measurement,
-                .MaxOut = 15000,
+                .MaxOut = 18000,
                 .Output_LPF_RC = 0.3,
             },
         },
@@ -107,7 +107,7 @@ void ChassisInit()
 
     //底盘跟随PID初始化
     PID_Init_Config_s Chassis_Follow_PID_config = {
-        .Kp = -40.0f,
+        .Kp = -100.0f,
         .Ki = -0.0f,
         .Kd = 0.0f,
         .MaxOut = 5000.0f,

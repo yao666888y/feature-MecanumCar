@@ -205,6 +205,7 @@ static void RemoteControlSet()
         gimbal_cmd_send.pitch += 0.0005f * (float)rc_data[TEMP].rc.rocker_l1;
 
         shoot_cmd_send.load_mode = LOAD_BURSTFIRE;
+        shoot_cmd_send.bullet_speed = SMALL_AMU_15;
         shoot_cmd_send.shoot_rate = 8.0f; // 8发/秒
     }
     else if (switch_is_up(rc_data[TEMP].rc.switch_right)) // 右侧开关状态[上],小陀螺模式

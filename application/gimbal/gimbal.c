@@ -26,18 +26,18 @@ void GimbalInit()
         },
         .controller_param_init_config = {
             .angle_PID = {
-                .Kp = 8, // 8
+                .Kp = 100, 
                 .Ki = 0,
-                .Kd = 0,
+                .Kd = 1,
                 .DeadBand = 0.01,
                 .Improve = PID_Trapezoid_Intergral | PID_Integral_Limit | PID_Derivative_On_Measurement,
                 .IntegralLimit = 100,
 
-                .MaxOut = 5000,
+                .MaxOut = 20000,
             },
             .speed_PID = {
-                .Kp = 50,  // 50
-                .Ki = 200, // 200
+                .Kp = 50,
+                .Ki = 10,
                 .Kd = 0,
                 .Improve = PID_Trapezoid_Intergral | PID_Integral_Limit | PID_Derivative_On_Measurement,
                 .IntegralLimit = 3000,
@@ -64,20 +64,20 @@ void GimbalInit()
         },
         .controller_param_init_config = {
             .angle_PID = {
-                .Kp = 10, // 10
-                .Ki = 0,
-                .Kd = 0,
+                .Kp = 250, // 10
+                .Ki = 100,
+                .Kd = 5,
                 .Improve = PID_Trapezoid_Intergral | PID_Integral_Limit | PID_Derivative_On_Measurement,
                 .IntegralLimit = 100,
-                .MaxOut = 2000,
+                .MaxOut = 50000,
             },
             .speed_PID = {
                 .Kp = 50,  // 50
-                .Ki = 350, // 350
+                .Ki = 100, // 350
                 .Kd = 0,   // 0
                 .Improve = PID_Trapezoid_Intergral | PID_Integral_Limit | PID_Derivative_On_Measurement,
                 .IntegralLimit = 2500,
-                .MaxOut = 20000,
+                .MaxOut = 30000,
             },
             // 安装云台时pitch轴是绕横轴转动,对应ins_task中的roll角
             .other_angle_feedback_ptr = &gimba_IMU_data->Roll,
