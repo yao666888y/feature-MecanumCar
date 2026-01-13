@@ -107,11 +107,11 @@ void ChassisInit()
 
     //底盘跟随PID初始化
     PID_Init_Config_s Chassis_Follow_PID_config = {
-        .Kp = -100.0f,
+        .Kp = -80.0f,
         .Ki = -0.0f,
         .Kd = 0.0f,
         .MaxOut = 5000.0f,
-        .DeadBand = 0.0f,
+        .DeadBand = 2.0f,
         .CoefA = 0.0f,
         .CoefB = 0.0f,
         .Improve = PID_Trapezoid_Intergral | PID_ChangingIntegrationRate,
