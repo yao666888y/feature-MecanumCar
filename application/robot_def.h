@@ -26,6 +26,7 @@
 
 /* 机器人重要参数定义,注意根据不同机器人进行修改,浮点数需要以.0或f结尾,无符号以u结尾 */
 // 云台参数
+#define SMALL_YAW_ALING_ECD 0        // 小yaw电机朝前时电机编码器值
 #define YAW_CHASSIS_ALIGN_ECD 7893   // 云台和底盘对齐指向相同方向时的电机编码器值,若对云台有机械改动需要修改
 #define YAW_ECD_GREATER_THAN_4096 1  // ALIGN_ECD值是否大于4096,是为1,否为0;用于计算云台偏转角度
 #define YAW_INSTALLATION_REVERSE 1   // 云台电机正置还是倒置(1为倒置)
@@ -33,9 +34,13 @@
 #define PITCH_MAX_ANGLE 20           // 云台竖直方向最大角度 (注意反馈如果是陀螺仪，则填写陀螺仪的角度)
 #define PITCH_MIN_ANGLE -30          // 云台竖直方向最小角度 (注意反馈如果是陀螺仪，则填写陀螺仪的角度)
 // 发射参数
+#define ENEMY_COLOR 0  // 敌方颜色：0蓝 1红
 #define ONE_BULLET_DELTA_ANGLE 45    // 发射一发弹丸拨盘转动的距离,由机械设计图纸给出
 #define REDUCTION_RATIO_LOADER 36.0f // 2006拨盘电机的减速比,英雄需要修改为3508的19.0f
 #define NUM_PER_CIRCLE 8             // 拨盘一圈的装载量
+#define RAD_FRICTION_WHEEL 0.022f        // 摩擦轮半径,单位m
+#define S_BIAS 0.1125f // 枪口前推的距离 m
+#define Z_BIAS 0.088f // c板到枪口水平面的垂直距离 m
 // 机器人底盘修改的参数,单位为mm(毫米)
 #define WHEEL_BASE 350              // 纵向轴距(前进后退方向)
 #define TRACK_WIDTH 300             // 横向轮距(左右平移方向)
@@ -210,8 +215,7 @@ typedef struct
 
 typedef struct
 {
-    // code to go here
-    // ...
+    float bullet_speed;
 } Shoot_Upload_Data_s;
 
 #pragma pack() // 开启字节对齐,结束前面的#pragma pack(1)

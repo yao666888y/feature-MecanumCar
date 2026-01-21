@@ -10,6 +10,7 @@
 #include "dji_motor.h"
 #include "bmi088.h"
 #include "buzzer.h"
+#include "solvetrajectory.h"
 // bsp
 #include "bsp_dwt.h"
 #include "bsp_log.h"
@@ -44,6 +45,11 @@ static Publisher_t *shoot_cmd_pub;           // 发射控制消息发布者
 static Subscriber_t *shoot_feed_sub;         // 发射反馈信息订阅者
 static Shoot_Ctrl_Cmd_s shoot_cmd_send;      // 传递给发射的控制信息
 static Shoot_Upload_Data_s shoot_fetch_data; // 从发射获取的反馈信息
+
+static Publisher_t *solvetrajectory_need_pub;   // 弹道解算所需消息发布者
+static Subscriber_t *solvetrajectory_feed_sub;  // 弹道解算反馈信息订阅者
+static SolveTrajectory_Recv_s solvetrajectory_need_data; // 弹道解算所需信息
+static SolveTrajectory_Send_s solvetrajectory_fetch_data; // 弹道解算获取的反馈信息
 
 static Robot_Status_e robot_state; // 机器人整体工作状态
 
@@ -118,6 +124,8 @@ void RobotCMDInit()
     gimbal_feed_sub = SubRegister("gimbal_feed", sizeof(Gimbal_Upload_Data_s));
     shoot_cmd_pub = PubRegister("shoot_cmd", sizeof(Shoot_Ctrl_Cmd_s));
     shoot_feed_sub = SubRegister("shoot_feed", sizeof(Shoot_Upload_Data_s));
+    solvetrajectory_need_pub = PubRegister("SolveTrajectory_need",sizeof(SolveTrajectory_Recv_s));
+    solvetrajectory_feed_sub = SubRegister("SolveTrajectory_feed",sizeof(SolveTrajectory_Send_s));
 
 #ifdef ONE_BOARD // 双板兼容
     chassis_cmd_pub = PubRegister("chassis_cmd", sizeof(Chassis_Ctrl_Cmd_s));
@@ -175,6 +183,30 @@ static void CalcOffsetAngle()
     while (chassis_cmd_send.offset_angle <= -180.0f) chassis_cmd_send.offset_angle += 360.0f;
 }
 
+void GetSolvetrajectory_need_data()
+{
+    // 视觉数据
+    solvetrajectory_need_data.tracking = vision_recv_data->tracking;
+    solvetrajectory_need_data.xw = vision_recv_data->x;
+    solvetrajectory_need_data.yw = vision_recv_data->y;
+    solvetrajectory_need_data.zw = vision_recv_data->z;
+    solvetrajectory_need_data.vxw = vision_recv_data->vx;
+    solvetrajectory_need_data.vyw = vision_recv_data->vy;
+    solvetrajectory_need_data.vzw = vision_recv_data->vz;
+    solvetrajectory_need_data.tar_yaw = vision_recv_data->yaw;
+    solvetrajectory_need_data.v_yaw = vision_recv_data->v_yaw;
+    solvetrajectory_need_data.r1 = vision_recv_data->r1;
+    solvetrajectory_need_data.r2 = vision_recv_data->r2;
+    solvetrajectory_need_data.dz = vision_recv_data->dz;
+    solvetrajectory_need_data.armor_id = vision_recv_data->armor_id;
+    solvetrajectory_need_data.armor_num = vision_recv_data->armor_num;
+    // 陀螺仪数据
+    solvetrajectory_need_data.current_yaw = -gimbal_fetch_data.gimbal_imu_data.Yaw;
+    solvetrajectory_need_data.current_pitch = -gimbal_fetch_data.gimbal_imu_data.Pitch;
+    // 发射数据
+    solvetrajectory_need_data.current_v = 23.9f;   // shoot_fetch_data.bullet_speed;
+}
+
 /**
  * @brief 控制输入为遥控器(调试时)的模式和控制量设置
  *
@@ -207,6 +239,13 @@ static void RemoteControlSet()
         shoot_cmd_send.load_mode = LOAD_BURSTFIRE;
         shoot_cmd_send.bullet_speed = SMALL_AMU_15;
         shoot_cmd_send.shoot_rate = 8.0f; // 8发/秒
+
+        // 自瞄测试
+        if(vision_recv_data->tracking==TRUE)
+        {   
+            gimbal_cmd_send.yaw = -solvetrajectory_fetch_data.yaw;
+            gimbal_cmd_send.pitch = solvetrajectory_fetch_data.pitch;
+        }
     }
     else if (switch_is_up(rc_data[TEMP].rc.switch_right)) // 右侧开关状态[上],小陀螺模式
     {
@@ -402,6 +441,7 @@ void RobotCMDTask()
 #endif // GIMBAL_BOARD
     SubGetMessage(shoot_feed_sub, &shoot_fetch_data);
     SubGetMessage(gimbal_feed_sub, &gimbal_fetch_data);
+    SubGetMessage(solvetrajectory_feed_sub,(void *)&solvetrajectory_fetch_data);
 
     // 根据gimbal的反馈值计算云台和底盘正方向的夹角,不需要传参,通过static私有变量完成
     CalcOffsetAngle();
@@ -414,7 +454,16 @@ void RobotCMDTask()
     EmergencyHandler(); // 处理模块离线和遥控器急停等紧急情况
 
     // 设置视觉发送数据,还需增加加速度和角速度数据
-    // VisionSetFlag(chassis_fetch_data.enemy_color,,chassis_fetch_data.bullet_speed)
+    // 设置视觉发送数据,还需增加加速度和角速度数据
+    setVisionSendData_rpy(-gimbal_fetch_data.gimbal_imu_data.Roll / 180.0f / PI,
+                          gimbal_fetch_data.gimbal_imu_data.Pitch / 180.0f / PI,
+                          -gimbal_fetch_data.gimbal_imu_data.Yaw / 180.0f / PI);
+    setVisionSendData_aim(solvetrajectory_fetch_data.aim_x,
+                          solvetrajectory_fetch_data.aim_y,
+                          solvetrajectory_fetch_data.aim_z);
+
+    // 设置弹道解算数据
+    GetSolvetrajectory_need_data();
 
     // 推送消息,双板通信,视觉通信等
     // 其他应用所需的控制数据在remotecontrolsetmode和mousekeysetmode中完成设置
@@ -426,4 +475,6 @@ void RobotCMDTask()
 #endif // GIMBAL_BOARD
     PubPushMessage(shoot_cmd_pub, (void *)&shoot_cmd_send);
     PubPushMessage(gimbal_cmd_pub, (void *)&gimbal_cmd_send);
+    PubPushMessage(solvetrajectory_need_pub, (void *)&solvetrajectory_need_data);
+
 }
