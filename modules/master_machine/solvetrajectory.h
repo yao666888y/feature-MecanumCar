@@ -66,6 +66,7 @@ typedef struct
     float aim_z;    // 目标点z坐标
     float pitch;    // 计算得到的pitch角度
     float yaw;      // 计算得到的yaw角度
+    bool solvetrajectory_updated;
 
 } SolveTrajectory_Send_s;	// 发送数据结构体
 

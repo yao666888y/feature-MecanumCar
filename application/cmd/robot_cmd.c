@@ -229,23 +229,30 @@ static void RemoteControlSet()
     {
         chassis_cmd_send.chassis_mode = CHASSIS_NO_FOLLOW;
         gimbal_cmd_send.gimbal_mode = GIMBAL_GYRO_MODE;
+
+        static float yaw_now;
+        static float picth_now;
+
         // 底盘参数,目前没有加入小陀螺(调试似乎暂时没有必要),系数需要调整
         chassis_cmd_send.vx = 8 * rc_data[TEMP].rc.rocker_r1; // 1竖直方向
         chassis_cmd_send.vy = 8 * rc_data[TEMP].rc.rocker_r_; // _水平方向
         // chassis_cmd_send.wz = rc_data[TEMP].rc.rocker_l_;
-        gimbal_cmd_send.yaw -= 0.002f * (float)rc_data[TEMP].rc.rocker_l_;
-        gimbal_cmd_send.pitch += 0.0005f * (float)rc_data[TEMP].rc.rocker_l1;
+        yaw_now -= 0.002f * (float)rc_data[TEMP].rc.rocker_l_;
+        picth_now += 0.0005f * (float)rc_data[TEMP].rc.rocker_l1;
 
         shoot_cmd_send.load_mode = LOAD_BURSTFIRE;
         shoot_cmd_send.bullet_speed = SMALL_AMU_15;
         shoot_cmd_send.shoot_rate = 8.0f; // 8发/秒
 
+        gimbal_cmd_send.yaw = yaw_now;
+        gimbal_cmd_send.pitch = picth_now;
         // 自瞄测试
-        if(vision_recv_data->tracking==TRUE)
+        if(vision_recv_data->tracking==TRUE && solvetrajectory_fetch_data.solvetrajectory_updated)
         {   
-            gimbal_cmd_send.yaw = -solvetrajectory_fetch_data.yaw;
-            gimbal_cmd_send.pitch = solvetrajectory_fetch_data.pitch;
+            gimbal_cmd_send.yaw = yaw_now + solvetrajectory_fetch_data.yaw;
+            gimbal_cmd_send.pitch = picth_now + solvetrajectory_fetch_data.pitch;
         }
+        
     }
     else if (switch_is_up(rc_data[TEMP].rc.switch_right)) // 右侧开关状态[上],小陀螺模式
     {

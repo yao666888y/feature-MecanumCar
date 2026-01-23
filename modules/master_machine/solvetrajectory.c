@@ -17,6 +17,9 @@
 #include "solvetrajectory.h"
 #include "message_center.h"
 
+#define ARMOR_NUM_SINGLE 1
+
+
 // 弹道补偿相关参数 待测试
 #define INFANTRY_K 0.092f          // 步兵弹道系数 0.085-0.095
 #define BIAS_TIME 0.05f            //偏置时间 s
@@ -113,6 +116,60 @@ float pitchTrajectoryCompensation(SolveTrajectoryParams* st, float s, float z, f
 */
 void autoSolveTrajectory(SolveTrajectoryParams* st)
 {
+    // 单板测试用
+    st->armor_num = ARMOR_NUM_SINGLE;
+    if (st->armor_num == ARMOR_NUM_SINGLE)
+    {
+        float flight_time = 0;
+
+        // 1. 预测时间
+        float horizontal_distance =
+            sqrtf(st->xw * st->xw + st->yw * st->yw) - st->s_bias;
+
+        float temp_pitch = -pitchTrajectoryCompensation(
+            st,
+            horizontal_distance,
+            st->zw + st->z_bias,
+            st->current_v,
+            &flight_time
+        );
+
+        float timeDelay = st->bias_time / 1000.0f + flight_time;
+
+        // 2. 单板线性预测（不使用 tar_yaw）
+        solvetrajectory_feed_data.aim_x =
+            st->xw + st->vxw * timeDelay;
+
+        solvetrajectory_feed_data.aim_y =
+            st->yw + st->vyw * timeDelay;
+
+        solvetrajectory_feed_data.aim_z =
+            st->zw + st->vzw * timeDelay;
+
+        // 3. 二次 pitch 解算
+        temp_pitch = -pitchTrajectoryCompensation(
+            st,
+            sqrtf(solvetrajectory_feed_data.aim_x *
+                solvetrajectory_feed_data.aim_x +
+                solvetrajectory_feed_data.aim_y *
+                solvetrajectory_feed_data.aim_y) - st->s_bias,
+            solvetrajectory_feed_data.aim_z + st->z_bias,
+            st->current_v,
+            &flight_time
+        );
+
+        if (isfinite(temp_pitch))
+            solvetrajectory_feed_data.pitch =
+                temp_pitch * 180.0f / PI;
+
+        // 4. yaw 直接指向目标点
+        solvetrajectory_feed_data.yaw =
+            atan2f(solvetrajectory_feed_data.aim_y,
+                solvetrajectory_feed_data.aim_x) * 180.0f / PI;
+
+        return; // ⚠️ 关键：直接返回，不进入多装甲板逻辑
+    }
+
     float flight_time = 0;
 
     // 1.先用当前目标位置计算pitch角度，得到 flight_time
@@ -220,6 +277,7 @@ void autoSolveTrajectory(SolveTrajectoryParams* st)
         solvetrajectory_feed_data.pitch = temp_pitch * 180.0f / PI;
     if(solvetrajectory_feed_data.aim_x || solvetrajectory_feed_data.aim_y)
         solvetrajectory_feed_data.yaw = (float)(atan2(solvetrajectory_feed_data.aim_y, solvetrajectory_feed_data.aim_x))*180.0f / PI;
+    
 }
 
 // 从坐标轴正向看向原点，逆时针方向为正
@@ -270,9 +328,11 @@ void SolveTrajectoryTask()
     if(!st.tracking)
     {
         // 无目标时不解算，直接返回
+        solvetrajectory_feed_data.solvetrajectory_updated = FALSE;
         return;
+
     }
-    
+    solvetrajectory_feed_data.solvetrajectory_updated = TRUE;
     // 弹道解算
     autoSolveTrajectory(&st);
 
