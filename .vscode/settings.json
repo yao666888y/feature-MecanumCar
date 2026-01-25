@@ -13,5 +13,6 @@
         "can_comm.h": "c",
         "dji_motor.h": "c",
         "bsp_log.h": "c"
-    }
+    },
+    "stm32-for-vscode.makePath": false
 }

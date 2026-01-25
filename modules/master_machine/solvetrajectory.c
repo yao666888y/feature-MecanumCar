@@ -17,7 +17,7 @@
 #include "solvetrajectory.h"
 #include "message_center.h"
 
-#define ARMOR_NUM_SINGLE 1
+// #define ARMOR_NUM_SINGLE 1
 
 
 // 弹道补偿相关参数 待测试

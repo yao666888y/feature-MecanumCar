@@ -63,7 +63,8 @@ typedef enum
 {
     ARMOR_NUM_BALANCE = 2,  // 平衡步兵
     ARMOR_NUM_OUTPOST = 3,  // 前哨站
-    ARMOR_NUM_NORMAL = 4    // 普通步兵
+    ARMOR_NUM_NORMAL = 4,   // 普通步兵
+	ARMOR_NUM_SINGLE = 1	 // 单块装甲板（测试用）
 }ARMOR_NUM;  // 装甲板数量
 
 typedef struct

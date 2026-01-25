@@ -202,7 +202,7 @@ void GetSolvetrajectory_need_data()
     solvetrajectory_need_data.armor_num = vision_recv_data->armor_num;
     // 陀螺仪数据
     solvetrajectory_need_data.current_yaw = -gimbal_fetch_data.gimbal_imu_data.Yaw;
-    solvetrajectory_need_data.current_pitch = -gimbal_fetch_data.gimbal_imu_data.Pitch;
+    solvetrajectory_need_data.current_pitch = gimbal_fetch_data.gimbal_imu_data.Pitch;
     // 发射数据
     solvetrajectory_need_data.current_v = 23.9f;   // shoot_fetch_data.bullet_speed;
 }
@@ -462,9 +462,9 @@ void RobotCMDTask()
 
     // 设置视觉发送数据,还需增加加速度和角速度数据
     // 设置视觉发送数据,还需增加加速度和角速度数据
-    setVisionSendData_rpy(-gimbal_fetch_data.gimbal_imu_data.Roll / 180.0f / PI,
-                          gimbal_fetch_data.gimbal_imu_data.Pitch / 180.0f / PI,
-                          -gimbal_fetch_data.gimbal_imu_data.Yaw / 180.0f / PI);
+    setVisionSendData_rpy(-gimbal_fetch_data.gimbal_imu_data.Roll / (180.0f / PI),
+                          gimbal_fetch_data.gimbal_imu_data.Pitch / (180.0f / PI),
+                          -gimbal_fetch_data.gimbal_imu_data.Yaw / (180.0f / PI));
     setVisionSendData_aim(solvetrajectory_fetch_data.aim_x,
                           solvetrajectory_fetch_data.aim_y,
                           solvetrajectory_fetch_data.aim_z);
