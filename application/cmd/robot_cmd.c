@@ -249,7 +249,7 @@ static void RemoteControlSet()
         // 自瞄测试
         if(vision_recv_data->tracking==TRUE && solvetrajectory_fetch_data.solvetrajectory_updated)
         {   
-            gimbal_cmd_send.yaw = yaw_now + solvetrajectory_fetch_data.yaw;
+            gimbal_cmd_send.yaw = yaw_now - solvetrajectory_fetch_data.yaw;
             gimbal_cmd_send.pitch = picth_now + solvetrajectory_fetch_data.pitch;
         }
         
