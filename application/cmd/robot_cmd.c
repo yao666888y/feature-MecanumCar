@@ -262,8 +262,24 @@ static void RemoteControlSet()
         chassis_cmd_send.vx = 8 * rc_data[TEMP].rc.rocker_r1; // 1竖直方向
         chassis_cmd_send.vy = 8 * rc_data[TEMP].rc.rocker_r_; // _水平方向
         // chassis_cmd_send.wz = rc_data[TEMP].rc.rocker_l_;
-        gimbal_cmd_send.yaw -= 0.002f * (float)rc_data[TEMP].rc.rocker_l_;
-        gimbal_cmd_send.pitch += 0.001f * (float)rc_data[TEMP].rc.rocker_l1;
+        
+        static float yaw_now;
+        static float picth_now;
+        yaw_now -= 0.002f * (float)rc_data[TEMP].rc.rocker_l_;
+        picth_now += 0.0005f * (float)rc_data[TEMP].rc.rocker_l1;
+        gimbal_cmd_send.yaw = yaw_now;
+        gimbal_cmd_send.pitch = picth_now;
+
+        // 自瞄测试
+        if(vision_recv_data->tracking==TRUE && solvetrajectory_fetch_data.solvetrajectory_updated)
+        {   
+            gimbal_cmd_send.yaw = yaw_now - solvetrajectory_fetch_data.yaw;
+            gimbal_cmd_send.pitch = picth_now + solvetrajectory_fetch_data.pitch;
+        }
+
+        shoot_cmd_send.load_mode = LOAD_BURSTFIRE;
+        shoot_cmd_send.bullet_speed = SMALL_AMU_15;
+        shoot_cmd_send.shoot_rate = 8.0f; // 8发/秒
     }
 
     if (rc_data->rc.dial > 300)
@@ -329,10 +345,26 @@ static void MouseKeySet()
     chassis_cmd_send.vx = rc_data[TEMP].key[KEY_PRESS].w * 300 - rc_data[TEMP].key[KEY_PRESS].s * 300; // 系数待测
     chassis_cmd_send.vy = rc_data[TEMP].key[KEY_PRESS].s * 300 - rc_data[TEMP].key[KEY_PRESS].d * 300;
 
-    gimbal_cmd_send.yaw += (float)rc_data[TEMP].mouse.x / 660 * 10; // 系数待测
-    gimbal_cmd_send.pitch += (float)rc_data[TEMP].mouse.y / 660 * 10;
+    static float yaw_now;
+    static float picth_now;
 
-    switch (rc_data[TEMP].key_count[KEY_PRESS][Key_Z] % 3) // Z键设置弹速
+    yaw_now -= (float)rc_data[TEMP].mouse.x / 660 * 10; // 系数待测
+    picth_now += (float)rc_data[TEMP].mouse.y / 660 * 10;
+
+    gimbal_cmd_send.yaw = yaw_now;
+    gimbal_cmd_send.pitch = picth_now;
+    if (rc_data[TEMP].mouse.press_r) // 鼠标右键按下,开启视觉模式
+    {
+        gimbal_cmd_send.yaw = yaw_now + solvetrajectory_fetch_data.yaw;
+        gimbal_cmd_send.pitch = picth_now + solvetrajectory_fetch_data.pitch;
+    }
+
+    if (rc_data[TEMP].key[KEY_PRESS].v) // 按V键,重启视觉模块
+    {
+        
+    }    
+
+    switch (rc_data[TEMP].key_count[KEY_PRESS][Key_Q] % 3) // Q键设置弹速
     {
     case 0:
         shoot_cmd_send.bullet_speed = 15;
@@ -344,30 +376,29 @@ static void MouseKeySet()
         shoot_cmd_send.bullet_speed = 30;
         break;
     }
-    switch (rc_data[TEMP].key_count[KEY_PRESS][Key_E] % 4) // E键设置发射模式
+
+    static loader_mode_e load_mode_now;
+    switch (rc_data[TEMP].key_count[KEY_PRESS][Key_E] % 3) // E键设置发射模式
     {
     case 0:
-        shoot_cmd_send.load_mode = LOAD_STOP;
+        load_mode_now = LOAD_1_BULLET;
         break;
     case 1:
-        shoot_cmd_send.load_mode = LOAD_1_BULLET;
-        break;
-    case 2:
-        shoot_cmd_send.load_mode = LOAD_3_BULLET;
+        load_mode_now = LOAD_3_BULLET;
         break;
     default:
-        shoot_cmd_send.load_mode = LOAD_BURSTFIRE;
+        load_mode_now = LOAD_BURSTFIRE;
         break;
     }
-    switch (rc_data[TEMP].key_count[KEY_PRESS][Key_R] % 2) // R键开关弹舱
+    if(rc_data[TEMP].mouse.press_r) // 鼠标右键按下，开始发射  初次上弹等待填充后才会发射
     {
-    case 0:
-        shoot_cmd_send.lid_mode = LID_OPEN;
-        break;
-    default:
-        shoot_cmd_send.lid_mode = LID_CLOSE;
-        break;
+        shoot_cmd_send.load_mode = load_mode_now;
     }
+    else
+    {
+        shoot_cmd_send.load_mode = LOAD_STOP;
+    }
+    
     switch (rc_data[TEMP].key_count[KEY_PRESS][Key_F] % 2) // F键开关摩擦轮
     {
     case 0:
@@ -377,6 +408,7 @@ static void MouseKeySet()
         shoot_cmd_send.friction_mode = FRICTION_ON;
         break;
     }
+
     switch (rc_data[TEMP].key_count[KEY_PRESS][Key_C] % 4) // C键设置底盘速度
     {
     case 0:
@@ -392,6 +424,17 @@ static void MouseKeySet()
         chassis_cmd_send.chassis_speed_buff = 100;
         break;
     }
+
+    switch (rc_data[TEMP].key_count[KEY_PRESS][Key_R] % 2) // R键开关弹舱
+    {
+    case 0:
+        shoot_cmd_send.lid_mode = LID_OPEN;
+        break;
+    default:
+        shoot_cmd_send.lid_mode = LID_CLOSE;
+        break;
+    }
+
     switch (rc_data[TEMP].key[KEY_PRESS].shift) // 待添加 按shift允许超功率 消耗缓冲能量
     {
     case 1:
