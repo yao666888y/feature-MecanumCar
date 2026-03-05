@@ -15,6 +15,8 @@
 #include "bsp_dwt.h"
 #include "bsp_log.h"
 
+#include "user_lib.h"
+
 // 私有宏,自动将编码器转换成角度值
 #define YAW_ALIGN_ANGLE (YAW_CHASSIS_ALIGN_ECD * ECD_ANGLE_COEF_DJI) // 对齐时的角度,0-360
 #define PTICH_HORIZON_ANGLE (PITCH_HORIZON_ECD * ECD_ANGLE_COEF_DJI) // pitch水平时电机的角度,0-360
@@ -27,7 +29,9 @@ static CANCommInstance *cmd_can_comm; // 双板通信
 #ifdef ONE_BOARD
 static Publisher_t *chassis_cmd_pub;   // 底盘控制消息发布者
 static Subscriber_t *chassis_feed_sub; // 底盘反馈信息订阅者
-#endif                                 // ONE_BOARD
+#endif       
+
+// ONE_BOARD
 
 static Chassis_Ctrl_Cmd_s chassis_cmd_send;      // 发送给底盘应用的信息,包括控制信息和UI绘制相关
 static Chassis_Upload_Data_s chassis_fetch_data; // 从底盘应用接收的反馈信息信息,底盘功率枪口热量与底盘运动状态等
@@ -220,8 +224,15 @@ static void RemoteControlSet()
         gimbal_cmd_send.gimbal_mode = GIMBAL_GYRO_MODE;
         chassis_cmd_send.vx = 8 * rc_data[TEMP].rc.rocker_r1; // 1竖直方向
         chassis_cmd_send.vy = 8 * rc_data[TEMP].rc.rocker_r_; // _水平方向
-        gimbal_cmd_send.yaw -= 0.002f * (float)rc_data[TEMP].rc.rocker_l_;
-        gimbal_cmd_send.pitch += 0.001f * (float)rc_data[TEMP].rc.rocker_l1;
+
+        static float yaw_total_mid = 0.0f;
+        static float pitch_mid = 0.0f;
+
+        yaw_total_mid  -= 0.002f * (float)rc_data[TEMP].rc.rocker_l_;
+        pitch_mid      += 0.001f * (float)rc_data[TEMP].rc.rocker_l1;
+
+        gimbal_cmd_send.yaw   = theta_format(yaw_total_mid); // ✅对外变成[-180,180]循环
+        gimbal_cmd_send.pitch = pitch_mid;
         
         shoot_cmd_send.load_mode = LOAD_1_BULLET;
     }
@@ -232,6 +243,9 @@ static void RemoteControlSet()
 
         static float yaw_now;
         static float picth_now;
+
+        // yaw_now = 0.0f;
+        // picth_now = 0.0f;
 
         // 底盘参数,目前没有加入小陀螺(调试似乎暂时没有必要),系数需要调整
         chassis_cmd_send.vx = 8 * rc_data[TEMP].rc.rocker_r1; // 1竖直方向
@@ -244,14 +258,27 @@ static void RemoteControlSet()
         shoot_cmd_send.bullet_speed = SMALL_AMU_15;
         shoot_cmd_send.shoot_rate = 8.0f; // 8发/秒
 
-        gimbal_cmd_send.yaw = yaw_now;
-        gimbal_cmd_send.pitch = picth_now;
+        // gimbal_cmd_send.yaw = yaw_now;
+        // gimbal_cmd_send.pitch = picth_now;
+        // // 自瞄测试
+        // if(vision_recv_data->tracking==TRUE && solvetrajectory_fetch_data.solvetrajectory_updated)
+        // {   
+        //     gimbal_cmd_send.yaw = yaw_now - solvetrajectory_fetch_data.yaw;
+        //     gimbal_cmd_send.pitch = picth_now + solvetrajectory_fetch_data.pitch;
+        // }
+
+        float yaw_cmd_total = yaw_now;
+        float pitch_cmd = picth_now;
+
         // 自瞄测试
-        if(vision_recv_data->tracking==TRUE && solvetrajectory_fetch_data.solvetrajectory_updated)
-        {   
-            gimbal_cmd_send.yaw = yaw_now - solvetrajectory_fetch_data.yaw;
-            gimbal_cmd_send.pitch = picth_now + solvetrajectory_fetch_data.pitch;
+        if (vision_recv_data->tracking == TRUE && solvetrajectory_fetch_data.solvetrajectory_updated)
+        {
+            yaw_cmd_total = -solvetrajectory_fetch_data.yaw;
+            pitch_cmd = solvetrajectory_fetch_data.pitch;
         }
+
+        gimbal_cmd_send.yaw = theta_format(yaw_cmd_total); // ✅对外变成[-180,180]循环
+        gimbal_cmd_send.pitch = pitch_cmd;
         
     }
     else if (switch_is_up(rc_data[TEMP].rc.switch_right)) // 右侧开关状态[上],小陀螺模式
@@ -267,15 +294,28 @@ static void RemoteControlSet()
         static float picth_now;
         yaw_now -= 0.002f * (float)rc_data[TEMP].rc.rocker_l_;
         picth_now += 0.0005f * (float)rc_data[TEMP].rc.rocker_l1;
-        gimbal_cmd_send.yaw = yaw_now;
-        gimbal_cmd_send.pitch = picth_now;
+        // gimbal_cmd_send.yaw = yaw_now;
+        // gimbal_cmd_send.pitch = picth_now;
 
-        // 自瞄测试
-        if(vision_recv_data->tracking==TRUE && solvetrajectory_fetch_data.solvetrajectory_updated)
-        {   
-            gimbal_cmd_send.yaw = yaw_now - solvetrajectory_fetch_data.yaw;
-            gimbal_cmd_send.pitch = picth_now + solvetrajectory_fetch_data.pitch;
+        // // 自瞄测试
+        // if(vision_recv_data->tracking==TRUE && solvetrajectory_fetch_data.solvetrajectory_updated)
+        // {   
+        //     gimbal_cmd_send.yaw = yaw_now - solvetrajectory_fetch_data.yaw;
+        //     gimbal_cmd_send.pitch = picth_now + solvetrajectory_fetch_data.pitch;
+        // }
+
+
+        float yaw_cmd_total  = yaw_now;
+        float pitch_cmd = picth_now;
+
+        if (vision_recv_data->tracking == TRUE && solvetrajectory_fetch_data.solvetrajectory_updated)
+        {
+            yaw_cmd_total = -solvetrajectory_fetch_data.yaw;
+            pitch_cmd = solvetrajectory_fetch_data.pitch;
         }
+
+        gimbal_cmd_send.yaw = theta_format(yaw_cmd_total); // ✅对外变成[-180,180]循环
+        gimbal_cmd_send.pitch = pitch_cmd;
 
         shoot_cmd_send.load_mode = LOAD_BURSTFIRE;
         shoot_cmd_send.bullet_speed = SMALL_AMU_15;

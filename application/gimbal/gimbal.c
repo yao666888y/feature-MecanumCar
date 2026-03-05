@@ -6,6 +6,18 @@
 #include "general_def.h"
 #include "bmi088.h"
 
+#include "user_lib.h"
+
+// 把[-180,180]的目标yaw“展开”为最接近当前多圈角(current_total)的等价目标
+static inline float unwrap_yaw_to_nearest_total(float target_wrapped, float current_total)
+{
+    // current_total可能是... -400, 800 这种多圈角
+    // 先把current_total映射到[-180,180]，再算最短角度误差
+    float cur_wrapped = theta_format(current_total);
+    float err         = theta_format(target_wrapped - cur_wrapped); // err ∈ [-180,180]
+    return current_total + err; // ✅得到连续的多圈ref
+}
+
 static attitude_t *gimba_IMU_data; // 云台IMU数据
 static DJIMotorInstance *yaw_motor, *pitch_motor;
 
@@ -107,6 +119,9 @@ void GimbalTask()
 {
     // 获取云台控制数据
     // 后续增加未收到数据的处理
+
+    float yaw_ref_total = 0.0f;
+
     SubGetMessage(gimbal_sub, &gimbal_cmd_recv);
 
     // @todo:现在已不再需要电机反馈,实际上可以始终使用IMU的姿态数据来作为云台的反馈,yaw电机的offset只是用来跟随底盘
@@ -126,7 +141,10 @@ void GimbalTask()
         DJIMotorChangeFeed(yaw_motor, SPEED_LOOP, OTHER_FEED);
         DJIMotorChangeFeed(pitch_motor, ANGLE_LOOP, OTHER_FEED);
         DJIMotorChangeFeed(pitch_motor, SPEED_LOOP, OTHER_FEED);
-        DJIMotorSetRef(yaw_motor, gimbal_cmd_recv.yaw); // yaw和pitch会在robot_cmd中处理好多圈和单圈
+        // DJIMotorSetRef(yaw_motor, gimbal_cmd_recv.yaw); // yaw和pitch会在robot_cmd中处理好多圈和单圈
+        yaw_ref_total = unwrap_yaw_to_nearest_total(gimbal_cmd_recv.yaw, gimba_IMU_data->YawTotalAngle);
+        DJIMotorSetRef(yaw_motor, yaw_ref_total);
+
         DJIMotorSetRef(pitch_motor, gimbal_cmd_recv.pitch);
         break;
     // 云台自由模式,使用编码器反馈,底盘和云台分离,仅云台旋转,一般用于调整云台姿态(英雄吊射等)/能量机关
@@ -137,7 +155,10 @@ void GimbalTask()
         DJIMotorChangeFeed(yaw_motor, SPEED_LOOP, MOTOR_FEED);
         DJIMotorChangeFeed(pitch_motor, ANGLE_LOOP, MOTOR_FEED);
         DJIMotorChangeFeed(pitch_motor, SPEED_LOOP, MOTOR_FEED);
-        DJIMotorSetRef(yaw_motor, gimbal_cmd_recv.yaw); // yaw和pitch会在robot_cmd中处理好多圈和单圈
+        // DJIMotorSetRef(yaw_motor, gimbal_cmd_recv.yaw); // yaw和pitch会在robot_cmd中处理好多圈和单圈
+        yaw_ref_total = unwrap_yaw_to_nearest_total(gimbal_cmd_recv.yaw, yaw_motor->measure.total_angle);
+        DJIMotorSetRef(yaw_motor, yaw_ref_total);
+        
         DJIMotorSetRef(pitch_motor, gimbal_cmd_recv.pitch);
         break;
     default:

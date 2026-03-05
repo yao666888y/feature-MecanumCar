@@ -40,10 +40,10 @@ UICharDraw(&UI_State_sta[5], "ss5", UI_Graph_ADD, 7, UI_Color_Green, 18, 2, 620,
         String_Operate   字符串操作，初始化时一般使用"UI_Graph_ADD"
         String_Layer    图层0-9
         String_Color    字符串颜色
-        String_Size     字号
-        String_Width    字符串线宽
+        String_Sidth    字符串线宽
         Start_x、Start_y    开始坐标
-        *stringdata    字符串数据
+        *stringdaze     字号
+        String_Wita    字符串数据
 
 //设置完毕后，使用“Char_ReFresh”发送即可：
 UICharRefresh(&referee_recv_info->referee_id, UI_State_sta[5]);

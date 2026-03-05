@@ -52,6 +52,14 @@ static SuperCapInstance *cap;                                       // 超级电
 static DJIMotorInstance *motor_lf, *motor_rf, *motor_lb, *motor_rb; // left right forward back
 static DJIMotorInstance *servo_lf, *servo_rf, *servo_lb, *servo_rb; // left right forward back
 
+
+static float power_buff;//缓冲能量
+static float limit_power;// 限制的功率
+static float limit_error;
+static float referee_real_power;// 缓冲的功率
+static int32_t limit_cnt;
+static uint16_t referee_limit_power;
+
 /* 用于自旋变速策略的时间变量 */
 // static float t;
 
@@ -165,30 +173,6 @@ void ChassisInit()
 #define LB_CENTER ((HALF_TRACK_WIDTH + CENTER_GIMBAL_OFFSET_X + HALF_WHEEL_BASE + CENTER_GIMBAL_OFFSET_Y) * DEGREE_2_RAD)
 #define RB_CENTER ((HALF_TRACK_WIDTH - CENTER_GIMBAL_OFFSET_X + HALF_WHEEL_BASE + CENTER_GIMBAL_OFFSET_Y) * DEGREE_2_RAD)
 
-//将电机转子转向内侧时 修正方向
-int8_t steering_dirt[4] = {1, -1, 1, -1};
-// 改为接收指针，写回调用者的变量
-void chassis_vector_to_M3508_wheel_speed(float vx_set, float vy_set, float wz_set,
-                                         float *vt_lf, float *vt_rf, float *vt_lb, float *vt_rb)
-{
-    // float wheel_rpm_ratio;
-    // wheel_rpm_ratio = 60.0f / (WHEEL_PERIMETER * 3.14159f) * REDUCTION_RATIO_WHEEL * 1000;
-
-    *vt_lf = (float)(steering_dirt[0] * sqrtf(powf(vy_set + wz_set * RADIUS_WHEEL * 0.707107f,2)
-                       + powf(vx_set - wz_set * RADIUS_WHEEL * 0.707107f,2)
-                       ));
-    *vt_rf = (float)(steering_dirt[1] * sqrtf(powf(vy_set - wz_set * RADIUS_WHEEL * 0.707107f,2)
-                       + powf(vx_set - wz_set * RADIUS_WHEEL * 0.707107f,2)
-                       )); 
-    *vt_rb = (float)(steering_dirt[2] * sqrtf(powf(vy_set - wz_set * RADIUS_WHEEL * 0.707107f,2)
-                       + powf(vx_set + wz_set * RADIUS_WHEEL * 0.707107f,2)
-                       ));
-    *vt_lb = (float)(steering_dirt[3] * sqrtf(powf(vy_set + wz_set * RADIUS_WHEEL * 0.707107f,2)
-                       + powf(vx_set + wz_set * RADIUS_WHEEL * 0.707107f,2)
-                       ));
-}
-
-double atan_angle[4];
 /*
  * 将角度差归一化到 (-180, 180]
  */
@@ -210,67 +194,6 @@ static float Normalize360(float a)
     while (a < 0.0f) a += 360.0f;
     while (a >= 360.0f) a -= 360.0f;
     return a;
-}
-
-/*
- * 计算目标多圈角度（不限制在0~360），并根据最小转角原则决定是否翻转驱动方向
- */
-void chassis_vector_to_GM6020_wheel_angle_ecd(float vx_set, float vy_set, float wz_set, float *angle_lf, float *angle_rf, float *angle_lb, float *angle_rb)
-{
-    // GM6020目标角度计算
-    if(!(vx_set == 0 && vy_set == 0 && wz_set == 0))//防止除数为零
-    {
-        //由于atan2算出来的结果是弧度，需转换成角度 计算公式为 弧度 * 180.f / PI 最终得到角度值 (0.707107f == 根号2)
-        atan_angle[0] = atan2((vx_set - wz_set * RADIUS_WHEEL * 0.707107f),(vy_set - wz_set * RADIUS_WHEEL * 0.707107f)) * 180.0f / PI;		
-        atan_angle[1] = atan2((vx_set - wz_set * RADIUS_WHEEL * 0.707107f),(vy_set + wz_set * RADIUS_WHEEL * 0.707107f)) * 180.0f / PI;
-        atan_angle[2] = atan2((vx_set + wz_set * RADIUS_WHEEL * 0.707107f),(vy_set - wz_set * RADIUS_WHEEL * 0.707107f)) * 180.0f / PI;
-        atan_angle[3] = atan2((vx_set + wz_set * RADIUS_WHEEL * 0.707107f),(vy_set + wz_set * RADIUS_WHEEL * 0.707107f)) * 180.0f / PI;
-    }  
-    // 目标单圈角度（0..360) 基于偏置+atan结果
-    float desired_single[4];
-    desired_single[0] = GM6020_LF_ANGLE + (float)atan_angle[0];
-    desired_single[1] = GM6020_RF_ANGLE + (float)atan_angle[1];
-    desired_single[2] = GM6020_LB_ANGLE + (float)atan_angle[2];
-    desired_single[3] = GM6020_RB_ANGLE + (float)atan_angle[3];
-
-    // 使用多圈全角（total_angle）作为基准生成无界目标角度，避免限制在0~360
-    DJIMotorInstance *servos[4] = {servo_lf, servo_rf, servo_lb, servo_rb};
-    float *targets[4] = {angle_lf, angle_rf, angle_lb, angle_rb};
-    int8_t base_dir[4] = {1, -1, 1, -1}; // 对应每个舵轮的默认驱动方向
-
-    for (int i = 0; i < 4; i++)
-    {
-        // 规范化 desired_single 到 [0,360)
-        float ds = Normalize360(desired_single[i]);
-
-        // 当前电机多圈角度和单圈角度
-        float cur_total = servos[i]->measure.total_angle;
-        float cur_single = servos[i]->measure.angle_single_round;
-
-        // 计算使目标最接近当前位置的单圈差值（范围在(-180,180]）
-        float diff_single = ds - cur_single;
-        diff_single = Normalize180(diff_single);
-
-        // 目标多圈角度 = 当前多圈角度 + 差值
-        *targets[i] = cur_total + diff_single;
-
-        // 再基于多圈差值判断是否需要翻转驱动方向（优劣弧）
-        float angle_diff = Normalize180(*targets[i] - cur_total);
-        if (angle_diff > 90.0f)
-        {
-            steering_dirt[i] = -base_dir[i];
-            *targets[i] = *targets[i] - 180.0f; // 仍为无界值
-        }
-        else if (angle_diff < -90.0f)
-        {
-            steering_dirt[i] = -base_dir[i];
-            *targets[i] = *targets[i] + 180.0f;
-        }
-        else
-        {
-            steering_dirt[i] = base_dir[i];
-        }
-    }
 }
 
 /**
