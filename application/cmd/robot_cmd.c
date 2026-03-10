@@ -208,7 +208,7 @@ void GetSolvetrajectory_need_data()
     solvetrajectory_need_data.current_yaw = -gimbal_fetch_data.gimbal_imu_data.Yaw;
     solvetrajectory_need_data.current_pitch = gimbal_fetch_data.gimbal_imu_data.Pitch;
     // 发射数据
-    solvetrajectory_need_data.current_v = 23.9f;   // shoot_fetch_data.bullet_speed;
+    solvetrajectory_need_data.current_v = 22.0f;   // shoot_fetch_data.bullet_speed;
 }
 
 /**
@@ -217,6 +217,8 @@ void GetSolvetrajectory_need_data()
  */
 static void RemoteControlSet()
 {
+    shoot_cmd_send.friction_mode = FRICTION_ON;
+
     // 控制底盘和云台运行模式,云台待添加,云台是否始终使用IMU数据?
     if (switch_is_mid(rc_data[TEMP].rc.switch_right)) // 右侧开关状态[中],底盘跟随云台,云台陀螺仪模式
     {
@@ -373,6 +375,7 @@ static void RemoteControlSet()
     //     shoot_cmd_send.load_mode = LOAD_1_BULLET;
     // else
     //     shoot_cmd_send.load_mode = LOAD_STOP;
+    shoot_cmd_send.friction_mode = FRICTION_ON;
 }
 
 
@@ -551,6 +554,8 @@ void RobotCMDTask()
     setVisionSendData_aim(solvetrajectory_fetch_data.aim_x,
                           solvetrajectory_fetch_data.aim_y,
                           solvetrajectory_fetch_data.aim_z);
+
+    // setVisionSendData_color(chassis_fetch_data.enemy_color);
 
     // 设置弹道解算数据
     GetSolvetrajectory_need_data();

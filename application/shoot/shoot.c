@@ -6,6 +6,8 @@
 #include "general_def.h"
 #include "servo_motor.h"
 
+#define CLAMP(x, min, max) ((x) < (min) ? (min) : ((x) > (max) ? (max) : (x))) // 限幅宏定义
+
 /* 对于双发射机构的机器人,将下面的数据封装成结构体即可,生成两份shoot应用实例 */
 static DJIMotorInstance  *loader; // 拨盘电机
 static ServoInstance *friction_l, *friction_r; // 左右摩擦轮
@@ -25,16 +27,33 @@ void ShootInit()
     Servo_Init_Config_s friction_config = {
         .pwm_init_config = {
             .htim = &htim1,
-            .channel = TIM_CHANNEL_1,
-            .period = 0.020f,    // 20ms
-            .dutyratio = 0.0f,     // 初始占空比0
+            .channel = TIM_CHANNEL_2,
+            .period = 0.0020f,    // 2ms
+            .dutyratio = 1.0f,     // 初始占空比1 最大油门行程对应的占空比
             .callback = NULL,
             .id = 0,
         },
         .servo_type = PWM_Servo,
     };
     friction_l = ServoInit(&friction_config);
-    ServoSetAngle(friction_l, 1.0f); // 设置初始角度,实测调整
+    friction_config.pwm_init_config.channel = TIM_CHANNEL_3;
+    friction_r = ServoInit(&friction_config);
+    ServoSetAngle(friction_l, 1.0f);
+    ServoSetAngle(friction_r, 1.0f);
+    DWT_Delay(2); // 等待电调自检
+    ServoSetAngle(friction_l, 0.5f);
+    ServoSetAngle(friction_r, 0.5f);
+
+    // 油门行程启动电机 占空比 0.5 ~ 0.78
+    for(int i=0;i<5;i++)
+    {
+        ServoSetAngle(friction_l, 0.5f+0.28f*i/4); 
+        ServoSetAngle(friction_r, 0.5f+0.28f*i/4); 
+        DWT_Delay(0.05f);
+    }
+
+    ServoSetAngle(friction_l, 0.5f);
+    ServoSetAngle(friction_r, 0.5f);
 
     // 拨盘电机
     Motor_Init_Config_s loader_config = {
@@ -81,7 +100,7 @@ void ShootInit()
     shoot_pub = PubRegister("shoot_feed", sizeof(Shoot_Upload_Data_s));
     shoot_sub = SubRegister("shoot_cmd", sizeof(Shoot_Ctrl_Cmd_s));
 }
-
+float setfric_PWM = 0.8f;
 /* 机器人发射机构控制核心任务 */
 void ShootTask()
 {
@@ -148,18 +167,16 @@ void ShootTask()
         while (1)
             ; // 未知模式,停止运行,检查指针越界,内存溢出等问题
     }
-
     // 确定是否开启摩擦轮,后续可能修改为键鼠模式下始终开启摩擦轮(上场时建议一直开启)
     if (shoot_cmd_recv.friction_mode == FRICTION_ON)
     {
+        ServoSetAngle(friction_l, setfric_PWM);
+        ServoSetAngle(friction_r, setfric_PWM);// 0.5f ~ 1.0f
+
         // 根据收到的弹速设置设定摩擦轮电机参考值,需实测后填入
         switch (shoot_cmd_recv.bullet_speed)
         {
         case SMALL_AMU_15:
-            for(float i=0.0f;i<0.075f;i+=0.001f)
-            {
-                ServoSetAngle(friction_l, i); 
-            }
             // DJIMotorSetRef(friction_l, 0);
             // DJIMotorSetRef(friction_r, 0);
             break;
@@ -172,16 +189,15 @@ void ShootTask()
             // DJIMotorSetRef(friction_r, 0);
             break;
         default: // 当前为了调试设定的默认值4000,因为还没有加入裁判系统无法读取弹速.
-            // DJIMotorSetRef(friction_l, 30000);
-            // DJIMotorSetRef(friction_r, 30000);
+            // friction_control(friction_l, 0.65f); // 占空比根据测试调整
+            // friction_control(friction_r, 0.65f);
             break;
         }
     }
     else // 关闭摩擦轮
     {
-        ServoSetAngle(friction_l, 1.0f); 
-        // DJIMotorSetRef(friction_l, 0);
-        // DJIMotorSetRef(friction_r, 0);
+        ServoSetAngle(friction_l, 0.5f);
+        ServoSetAngle(friction_r, 0.5f);
     }
 
     // 开关弹舱盖

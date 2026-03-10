@@ -17,7 +17,6 @@
 #include "solvetrajectory.h"
 #include "message_center.h"
 
-// #define ARMOR_NUM_SINGLE 1
 
 
 // 弹道补偿相关参数 待测试
@@ -116,8 +115,7 @@ float pitchTrajectoryCompensation(SolveTrajectoryParams* st, float s, float z, f
 */
 void autoSolveTrajectory(SolveTrajectoryParams* st)
 {
-    // 单板测试用
-    st->armor_num = ARMOR_NUM_SINGLE;
+    // 单板测试用+
     if (st->armor_num == ARMOR_NUM_SINGLE)
     {
         float flight_time = 0;
