@@ -1,0 +1,9 @@
+// J-Link Commander 烧录脚本，供 VS Code 任务 download jlink 调用
+// 用法: JLink.exe -device STM32F407IG -if SWD -speed 4000 -CommanderScript .vscode/download.jlink
+// 路径相对于工作区根目录
+r
+h
+loadfile build/basic_framework.hex
+r
+go
+q

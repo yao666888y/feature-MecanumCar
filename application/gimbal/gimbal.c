@@ -71,28 +71,28 @@ void GimbalInit()
     // PITCH
     Motor_Init_Config_s pitch_config = {
         .can_init_config = {
-            .can_handle = &hcan2,
+            .can_handle = &hcan1,
             .tx_id = 6,
         },
         .controller_param_init_config = {
             .angle_PID = {
-                .Kp = 250, // 10
-                .Ki = 100,
-                .Kd = 2,
+                .Kp = 35, // 10
+                .Ki = 0,
+                .Kd = 0.09,
                 .Improve = PID_Trapezoid_Intergral | PID_Integral_Limit | PID_Derivative_On_Measurement,
                 .IntegralLimit = 100,
                 .MaxOut = 30000,
             },
             .speed_PID = {
                 .Kp = 50,  // 50
-                .Ki = 100, // 350
+                .Ki = 0, // 350
                 .Kd = 0,   // 0
                 .Improve = PID_Trapezoid_Intergral | PID_Integral_Limit | PID_Derivative_On_Measurement,
                 .IntegralLimit = 2500,
                 .MaxOut = 30000,
             },
             // 安装云台时pitch轴是绕横轴转动,对应ins_task中的roll角
-            .other_angle_feedback_ptr = &gimba_IMU_data->Pitch,
+            .other_angle_feedback_ptr = &gimba_IMU_data->Roll,
             // 还需要增加角速度额外反馈指针,注意方向,ins_task.md中有c板的bodyframe坐标系说明
             .other_speed_feedback_ptr = (&gimba_IMU_data->Gyro[0]),
         },
@@ -101,8 +101,8 @@ void GimbalInit()
             .speed_feedback_source = OTHER_FEED,
             .outer_loop_type = ANGLE_LOOP,
             .close_loop_type = SPEED_LOOP | ANGLE_LOOP,
-            .motor_reverse_flag = MOTOR_DIRECTION_NORMAL,
-            .feedback_reverse_flag = FEEDBACK_DIRECTION_REVERSE,
+            .motor_reverse_flag = 1,
+            .feedback_reverse_flag = 0,
         },
         .motor_type = GM6020,
     };

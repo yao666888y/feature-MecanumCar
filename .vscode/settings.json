@@ -14,5 +14,7 @@
         "dji_motor.h": "c",
         "bsp_log.h": "c"
     },
-    "stm32-for-vscode.makePath": false
+    "stm32-for-vscode.makePath": false,
+    // J-Link 安装位置（Cortex-Debug 用它启动 GDB Server 进行下载/调试）
+    "cortex-debug.JLinkGDBServerPath": "D:\\JLink_V932\\JLinkGDBServerCL.exe"
 }

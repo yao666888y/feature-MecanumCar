@@ -30,7 +30,7 @@
 #define YAW_CHASSIS_ALIGN_ECD 7893   // 云台和底盘对齐指向相同方向时的电机编码器值,若对云台有机械改动需要修改
 #define YAW_ECD_GREATER_THAN_4096 1  // ALIGN_ECD值是否大于4096,是为1,否为0;用于计算云台偏转角度
 #define YAW_INSTALLATION_REVERSE 1   // 云台电机正置还是倒置(1为倒置)
-#define PITCH_HORIZON_ECD 3412       // 云台处于水平位置时编码器值,若对云台有机械改动需要修改
+#define PITCH_HORIZON_ECD 4150       // 云台处于水平位置时编码器值,若对云台有机械改动需要修改
 #define PITCH_MAX_ANGLE 20           // 云台竖直方向最大角度 (注意反馈如果是陀螺仪，则填写陀螺仪的角度)
 #define PITCH_MIN_ANGLE -30          // 云台竖直方向最小角度 (注意反馈如果是陀螺仪，则填写陀螺仪的角度)
 // 发射参数
