@@ -37,7 +37,10 @@ void ShootInit()
     };
     friction_l = ServoInit(&friction_config);
     friction_config.pwm_init_config.channel = TIM_CHANNEL_3;
+
+    // 右摩擦轮
     friction_r = ServoInit(&friction_config);
+    
     ServoSetAngle(friction_l, 1.0f);
     ServoSetAngle(friction_r, 1.0f);
     DWT_Delay(2); // 等待电调自检
