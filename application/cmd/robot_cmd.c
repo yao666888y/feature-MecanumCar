@@ -21,6 +21,12 @@
 #define YAW_ALIGN_ANGLE (YAW_CHASSIS_ALIGN_ECD * ECD_ANGLE_COEF_DJI) // 对齐时的角度,0-360
 #define PTICH_HORIZON_ANGLE (PITCH_HORIZON_ECD * ECD_ANGLE_COEF_DJI) // pitch水平时电机的角度,0-360
 
+// 云台摇杆增量系数(每个控制周期累加,robot_task约200Hz);数值越大云台跟随摇杆越快
+#define GIMBAL_YAW_RC_GAIN   0.002f
+#define GIMBAL_PITCH_RC_GAIN 0.001f
+// 通用限幅宏
+#define CLAMP_F(x, lo, hi)   ((x) < (lo) ? (lo) : ((x) > (hi) ? (hi) : (x)))
+
 /* cmd应用包含的模块实例指针和交互信息存储*/
 #ifdef GIMBAL_BOARD // 对双板的兼容,条件编译
 #include "can_comm.h"
@@ -43,6 +49,15 @@ static Vision_Send_s vision_send_data;  // 视觉发送数据
 static Publisher_t *gimbal_cmd_pub;            // 云台控制消息发布者
 static Subscriber_t *gimbal_feed_sub;          // 云台反馈信息订阅者
 static Gimbal_Ctrl_Cmd_s gimbal_cmd_send;      // 传递给云台的控制信息
+
+/**
+ * 云台角度指令(绝对目标):由摇杆增量累积得到,所有档位共用同一套累积量,
+ * 避免切换右开关档位/左右开关时云台目标角度突变.
+ * 切入遥控器模式时把 yaw 目标同步到当前姿态,避免云台"猛转"到上次的累积角度.
+ */
+static float   gimbal_yaw_cmd   = 0.0f;   // yaw 多圈目标角(deg)
+static float   gimbal_pitch_cmd = 0.0f;   // pitch 目标角(deg),与 pitch 反馈(IMU Roll)同一坐标
+static uint8_t gimbal_yaw_need_sync = 1;  // 1: 下一帧遥控器模式需要把 yaw 目标对齐当前姿态
 static Gimbal_Upload_Data_s gimbal_fetch_data; // 从云台获取的反馈信息
 
 static Publisher_t *shoot_cmd_pub;           // 发射控制消息发布者
@@ -217,8 +232,15 @@ void GetSolvetrajectory_need_data()
  */
 static void RemoteControlSet()
 {
-    shoot_cmd_send.friction_mode = FRICTION_ON;
+    // 切入遥控器模式的第一帧:把 yaw 目标同步到当前姿态,避免云台猛转到上一次的累积角度
+    if (gimbal_yaw_need_sync)
+    {
+        gimbal_yaw_cmd = gimbal_fetch_data.gimbal_imu_data.YawTotalAngle;
+        gimbal_yaw_need_sync = 0;
+    }
 
+    shoot_cmd_send.friction_mode = FRICTION_OFF;
+    
     // 控制底盘和云台运行模式,云台待添加,云台是否始终使用IMU数据?
     if (switch_is_mid(rc_data[TEMP].rc.switch_right)) // 右侧开关状态[中],底盘跟随云台,云台陀螺仪模式
     {
@@ -227,14 +249,12 @@ static void RemoteControlSet()
         chassis_cmd_send.vx = 8 * rc_data[TEMP].rc.rocker_r1; // 1竖直方向
         chassis_cmd_send.vy = 8 * rc_data[TEMP].rc.rocker_r_; // _水平方向
 
-        static float yaw_total_mid = 0.0f;
-        static float pitch_mid = 0.0f;
+        gimbal_yaw_cmd   -= GIMBAL_YAW_RC_GAIN * (float)rc_data[TEMP].rc.rocker_l_;
+        gimbal_pitch_cmd -= GIMBAL_PITCH_RC_GAIN * (float)rc_data[TEMP].rc.rocker_l1; // 上推抬头(方向按实测修正)
+        gimbal_pitch_cmd = CLAMP_F(gimbal_pitch_cmd, PITCH_MIN_ANGLE, PITCH_MAX_ANGLE); // 限幅: 防止一直推导致累积超限
 
-        yaw_total_mid  -= 0.002f * (float)rc_data[TEMP].rc.rocker_l_;
-        pitch_mid      += 0.001f * (float)rc_data[TEMP].rc.rocker_l1;
-
-        gimbal_cmd_send.yaw   = theta_format(yaw_total_mid); // ✅对外变成[-180,180]循环
-        gimbal_cmd_send.pitch = pitch_mid;
+        gimbal_cmd_send.yaw   = theta_format(gimbal_yaw_cmd); // ✅对外变成[-180,180]循环
+        gimbal_cmd_send.pitch = gimbal_pitch_cmd;
         
         shoot_cmd_send.load_mode = LOAD_1_BULLET;
     }
@@ -243,18 +263,13 @@ static void RemoteControlSet()
         chassis_cmd_send.chassis_mode = CHASSIS_NO_FOLLOW;
         gimbal_cmd_send.gimbal_mode = GIMBAL_GYRO_MODE;
 
-        static float yaw_now;
-        static float picth_now;
-
-        // yaw_now = 0.0f;
-        // picth_now = 0.0f;
-
         // 底盘参数,目前没有加入小陀螺(调试似乎暂时没有必要),系数需要调整
         chassis_cmd_send.vx = 8 * rc_data[TEMP].rc.rocker_r1; // 1竖直方向
         chassis_cmd_send.vy = 8 * rc_data[TEMP].rc.rocker_r_; // _水平方向
         // chassis_cmd_send.wz = rc_data[TEMP].rc.rocker_l_;
-        yaw_now -= 0.002f * (float)rc_data[TEMP].rc.rocker_l_;
-        picth_now += 0.0005f * (float)rc_data[TEMP].rc.rocker_l1;
+        gimbal_yaw_cmd   -= GIMBAL_YAW_RC_GAIN * (float)rc_data[TEMP].rc.rocker_l_;
+        gimbal_pitch_cmd -= GIMBAL_PITCH_RC_GAIN * (float)rc_data[TEMP].rc.rocker_l1; // 上推抬头
+        gimbal_pitch_cmd = CLAMP_F(gimbal_pitch_cmd, PITCH_MIN_ANGLE, PITCH_MAX_ANGLE); // 限幅防累积
 
         shoot_cmd_send.load_mode = LOAD_BURSTFIRE;
         shoot_cmd_send.bullet_speed = SMALL_AMU_15;
@@ -269,18 +284,22 @@ static void RemoteControlSet()
         //     gimbal_cmd_send.pitch = picth_now + solvetrajectory_fetch_data.pitch;
         // }
 
-        float yaw_cmd_total = yaw_now;
-        float pitch_cmd = picth_now;
+        float yaw_cmd_total = gimbal_yaw_cmd;
+        float pitch_cmd = gimbal_pitch_cmd;
 
         // 自瞄测试
         if (vision_recv_data->tracking == TRUE && solvetrajectory_fetch_data.solvetrajectory_updated)
         {
             yaw_cmd_total = -solvetrajectory_fetch_data.yaw;
             pitch_cmd = solvetrajectory_fetch_data.pitch;
+            gimbal_yaw_cmd = yaw_cmd_total;   // 自瞄时同步累积量,退出自瞄不突跳
+            gimbal_pitch_cmd = CLAMP_F(pitch_cmd, PITCH_MIN_ANGLE, PITCH_MAX_ANGLE);
         }
 
         gimbal_cmd_send.yaw = theta_format(yaw_cmd_total); // ✅对外变成[-180,180]循环
-        gimbal_cmd_send.pitch = pitch_cmd;
+        gimbal_cmd_send.pitch = CLAMP_F(pitch_cmd, PITCH_MIN_ANGLE, PITCH_MAX_ANGLE);
+
+        shoot_cmd_send.friction_mode = FRICTION_ON;
         
     }
     else if (switch_is_up(rc_data[TEMP].rc.switch_right)) // 右侧开关状态[上],小陀螺模式
@@ -292,10 +311,9 @@ static void RemoteControlSet()
         chassis_cmd_send.vy = 8 * rc_data[TEMP].rc.rocker_r_; // _水平方向
         // chassis_cmd_send.wz = rc_data[TEMP].rc.rocker_l_;
         
-        static float yaw_now;
-        static float picth_now;
-        yaw_now -= 0.002f * (float)rc_data[TEMP].rc.rocker_l_;
-        picth_now += 0.0005f * (float)rc_data[TEMP].rc.rocker_l1;
+        gimbal_yaw_cmd   -= GIMBAL_YAW_RC_GAIN * (float)rc_data[TEMP].rc.rocker_l_;
+        gimbal_pitch_cmd -= GIMBAL_PITCH_RC_GAIN * (float)rc_data[TEMP].rc.rocker_l1; // 上推抬头
+        gimbal_pitch_cmd = CLAMP_F(gimbal_pitch_cmd, PITCH_MIN_ANGLE, PITCH_MAX_ANGLE); // 限幅防累积
         // gimbal_cmd_send.yaw = yaw_now;
         // gimbal_cmd_send.pitch = picth_now;
 
@@ -307,17 +325,19 @@ static void RemoteControlSet()
         // }
 
 
-        float yaw_cmd_total  = yaw_now;
-        float pitch_cmd = picth_now;
+        float yaw_cmd_total  = gimbal_yaw_cmd;
+        float pitch_cmd = gimbal_pitch_cmd;
 
         if (vision_recv_data->tracking == TRUE && solvetrajectory_fetch_data.solvetrajectory_updated)
         {
             yaw_cmd_total = -solvetrajectory_fetch_data.yaw;
             pitch_cmd = solvetrajectory_fetch_data.pitch;
+            gimbal_yaw_cmd = yaw_cmd_total;   // 自瞄时同步累积量,退出自瞄不突跳
+            gimbal_pitch_cmd = CLAMP_F(pitch_cmd, PITCH_MIN_ANGLE, PITCH_MAX_ANGLE);
         }
 
         gimbal_cmd_send.yaw = theta_format(yaw_cmd_total); // ✅对外变成[-180,180]循环
-        gimbal_cmd_send.pitch = pitch_cmd;
+        gimbal_cmd_send.pitch = CLAMP_F(pitch_cmd, PITCH_MIN_ANGLE, PITCH_MAX_ANGLE);
 
         shoot_cmd_send.load_mode = LOAD_BURSTFIRE;
         shoot_cmd_send.bullet_speed = SMALL_AMU_15;
@@ -375,7 +395,7 @@ static void RemoteControlSet()
     //     shoot_cmd_send.load_mode = LOAD_1_BULLET;
     // else
     //     shoot_cmd_send.load_mode = LOAD_STOP;
-    shoot_cmd_send.friction_mode = FRICTION_ON;
+    // shoot_cmd_send.friction_mode = FRICTION_ON;
 }
 
 
@@ -503,6 +523,7 @@ static void EmergencyHandler()
     if (switch_is_up(rc_data[TEMP].rc.switch_left) || robot_state == ROBOT_STOP) // 还需添加重要应用和模块离线的判断
     {
         robot_state = ROBOT_STOP;
+        gimbal_yaw_need_sync = 1;   // 急停后重新进入遥控器模式时, yaw 目标要重新对齐当前姿态
         gimbal_cmd_send.gimbal_mode = GIMBAL_ZERO_FORCE;
         chassis_cmd_send.chassis_mode = CHASSIS_ZERO_FORCE;
         shoot_cmd_send.shoot_mode = SHOOT_OFF;
@@ -538,6 +559,10 @@ void RobotCMDTask()
 
     // 根据gimbal的反馈值计算云台和底盘正方向的夹角,不需要传参,通过static私有变量完成
     CalcOffsetAngle();
+    // 非遥控器模式(键鼠/急停/遥控器离线)时,下次进入遥控器模式需要把 yaw 目标重新对齐当前姿态
+    if (!switch_is_down(rc_data[TEMP].rc.switch_left))
+        gimbal_yaw_need_sync = 1;
+
     // 根据遥控器左侧开关,确定当前使用的控制模式为遥控器调试还是键鼠
     if (switch_is_down(rc_data[TEMP].rc.switch_left)) // 遥控器左侧开关状态为[下],遥控器控制
         RemoteControlSet();
