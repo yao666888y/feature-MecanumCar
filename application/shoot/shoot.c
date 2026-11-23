@@ -7,6 +7,7 @@
 #include "servo_motor.h"
 
 #define CLAMP(x, min, max) ((x) < (min) ? (min) : ((x) > (max) ? (max) : (x))) // 限幅宏定义
+#define LOADER_REVERSE_RATE 3.0f // 反转退弹速度, 等效"发/秒"(方向为负, 数值越小退得越慢)
 
 /* 对于双发射机构的机器人,将下面的数据封装成结构体即可,生成两份shoot应用实例 */
 static DJIMotorInstance  *loader; // 拨盘电机
@@ -77,16 +78,16 @@ void ShootInit()
                 .Ki = 1, // 1
                 .Kd = 0,
                 .Improve = PID_Integral_Limit,
-                .IntegralLimit = 5000,
-                .MaxOut = 5000,
+                .IntegralLimit = 8000,
+                .MaxOut = 8000,
             },
             .current_PID = {
-                .Kp = 0.7, // 0.7
+                .Kp = 2.0, // 0.7
                 .Ki = 0.1, // 0.1
                 .Kd = 0,
                 .Improve = PID_Integral_Limit,
-                .IntegralLimit = 5000,
-                .MaxOut = 5000,
+                .IntegralLimit = 8000,
+                .MaxOut = 8000,
             },
         },
         .controller_setting_init_config = {
@@ -122,6 +123,13 @@ void ShootTask()
         // DJIMotorEnable(friction_l);
         // DJIMotorEnable(friction_r);
         DJIMotorEnable(loader);
+    }
+
+    // 退弹模式不允许被单发/连发的不应期拦住
+    if (shoot_cmd_recv.load_mode == LOAD_REVERSE)
+    {
+        hibernate_time = 0;
+        dead_time = 0;
     }
 
     // 如果上一次触发单发或3发指令的时间加上不应期仍然大于当前时间(尚未休眠完毕),直接返回即可
@@ -162,9 +170,10 @@ void ShootTask()
         break;
     // 拨盘反转,对速度闭环,后续增加卡弹检测(通过裁判系统剩余热量反馈和电机电流)
     // 也有可能需要从switch-case中独立出来
-    case LOAD_REVERSE:
+    case LOAD_REVERSE:   // 反转退弹: 低速反转, 把卡住的弹丸退回弹仓(松开拨轮即停)
         DJIMotorOuterLoop(loader, SPEED_LOOP);
-        // ...
+        DJIMotorChangeFeed(loader, SPEED_AND_CURRENT_LOOP, MOTOR_FEED);
+        DJIMotorSetRef(loader, -LOADER_REVERSE_RATE * ONE_BULLET_DELTA_ANGLE * REDUCTION_RATIO_LOADER);
         break;
     default:
         while (1)

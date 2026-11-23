@@ -344,9 +344,15 @@ static void RemoteControlSet()
         shoot_cmd_send.shoot_rate = 8.0f; // 8发/秒
     }
 
+    // 左拨轮三态: 下拨(>300)正常发射; 上拨(<-300)反转退弹; 中间停止
     if (rc_data->rc.dial > 300)
     {
         shoot_cmd_send.shoot_mode = SHOOT_ON;
+    }
+    else if (rc_data->rc.dial < -300) // 上拨到底: 反转退弹, 松开回中即停
+    {
+        shoot_cmd_send.shoot_mode = SHOOT_ON;       // 使能拨盘
+        shoot_cmd_send.load_mode  = LOAD_REVERSE;   // 覆盖前面的单发/连发设置
     }
     else
     {
